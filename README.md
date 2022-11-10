@@ -26,3 +26,6 @@ bash run-malicious.sh
 ```bash
 tensorboard --logdir ./fl_logs
 ```
+
+![training_metrics](img/training_metrics.png)
+![legend](img/legend.png)
