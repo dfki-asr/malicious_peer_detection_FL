@@ -14,10 +14,11 @@ class TensorboardStrategy(fl.server.strategy.FedAvg):
     def __init__(
         self,
         min_fit_clients,
+        min_available_clients,
         eval_fn,
         writer):
 
-        super().__init__(min_fit_clients=min_fit_clients, evaluate_fn=eval_fn)
+        super().__init__(min_fit_clients=min_fit_clients, min_available_clients=min_available_clients, evaluate_fn=eval_fn)
         self.writer = writer
 
     def evaluate(self, server_round, parameters):

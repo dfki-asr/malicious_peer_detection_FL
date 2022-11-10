@@ -6,7 +6,7 @@ python3 utils/dl_dataset.py --dataset mnist
 
 # First case: without malicious updates
 # generate partitions
-python3 utils/partition_data.py --n_partitions 4 --dataset mnist
+python3 utils/partition_data.py --n_partitions 10 --dataset mnist
 
 # start server and clients
 python3 server.py &

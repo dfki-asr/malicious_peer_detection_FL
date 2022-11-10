@@ -86,7 +86,7 @@ def generate_partitions(n_partitions, dataset, malicious=False):
 
     # Permute labels of the subset to simulate malicious updates
     if malicious:
-        train_target_subsets[n_partitions-1] = np.random.permutation(train_target_subsets[n_partitions-1])
+        train_target_subsets[3] = np.random.permutation(train_target_subsets[3])
 
 
     # Save subsets

@@ -12,8 +12,8 @@ from strategies.TensorboardStrategy import TensorboardStrategy
 
 
 torch.manual_seed(0)
-batch_size = 32
-num_rounds = 5
+batch_size = 64
+num_rounds = 10
 dataset = "mnist"
 DEVICE = "cpu"
 
@@ -55,7 +55,8 @@ if __name__ == "__main__":
 
 	# Optimization strategy
 	strategy = TensorboardStrategy(
-		min_fit_clients=2,
+		min_fit_clients=4,
+		min_available_clients=4,
 		eval_fn=get_eval_fn(model),
 		writer=writer
 	)
