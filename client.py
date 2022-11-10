@@ -12,7 +12,7 @@ import flwr as fl
 import numpy as np
 
 torch.manual_seed(0)
-batch_size = 32
+batch_size = 64
 DEVICE = "cpu"
 
 
