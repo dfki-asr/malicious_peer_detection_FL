@@ -5,7 +5,7 @@ import argparse
 import torch
 from torch.utils.tensorboard import SummaryWriter
 from utils.datasets import load_partition
-from utils.models import train, test, TwoConvCNN
+from utils.models import train, test, CVAE
 from utils.partition_data import Partition
 
 import flwr as fl
@@ -36,12 +36,12 @@ class FlowerClient(fl.client.NumPyClient):
 
     def fit(self, parameters, config):
         set_parameters(self.net, parameters)
-        train(self.net, self.trainloader, epochs=1)
+        train(self.net, self.trainloader, epochs=1, device=DEVICE)
         return get_parameters(self.net), len(self.trainloader), {}
 
     def evaluate(self, parameters, config):
         set_parameters(self.net, parameters)
-        loss, accuracy = test(self.net, self.valloader)
+        loss, accuracy = test(self.net, self.valloader, device=DEVICE)
         return float(loss), len(self.valloader), {"accuracy": float(accuracy)}
 
 
@@ -56,7 +56,7 @@ if __name__ == "__main__":
 	)
 	args = parser.parse_args()
 
-	model = TwoConvCNN()
+	model = CVAE(dim_x=(28, 28, 1), dim_y=10, dim_z=20)
 	trainloader, testloader, _ = load_partition(args.num, batch_size)
 
 	if args.num == 3:

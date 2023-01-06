@@ -7,7 +7,7 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 
 from utils.datasets import load_data
-from utils.models import test, TwoConvCNN
+from utils.models import test, CVAE
 from strategies.TensorboardStrategy import TensorboardStrategy
 
 
@@ -18,7 +18,7 @@ dataset = "mnist"
 DEVICE = "cpu"
 
 # Global Model
-model = TwoConvCNN().to(DEVICE)
+model = CVAE(dim_x=(28, 28, 1), dim_y=10, dim_z=20).to(DEVICE)
 
 # Centralized eval function
 def get_eval_fn(model):
@@ -55,8 +55,8 @@ if __name__ == "__main__":
 
 	# Optimization strategy
 	strategy = TensorboardStrategy(
-		min_fit_clients=4,
-		min_available_clients=4,
+		min_fit_clients=2,
+		min_available_clients=2,
 		eval_fn=get_eval_fn(model),
 		writer=writer
 	)
