@@ -8,14 +8,16 @@ from torch.utils.tensorboard import SummaryWriter
 
 from utils.datasets import load_data
 from utils.models import test, CVAE
-from strategies.TensorboardStrategy import TensorboardStrategy
+from strategies.MaliciousUpdateDetectionStrategy import MaliciousUpdateDetection
 
 
 torch.manual_seed(0)
+DEVICE='cpu'
+#DEVICE='cuda' if torch.cuda.is_available() else 'cpu'
+
 batch_size = 64
 num_rounds = 10
 dataset = "mnist"
-DEVICE = "cpu"
 
 # Global Model
 model = CVAE(dim_x=(28, 28, 1), dim_y=10, dim_z=20).to(DEVICE)
@@ -29,9 +31,9 @@ def get_eval_fn(model):
 	# Evaluate funcion
 	def evaluate(server_round, weights, conf):
 		model.set_weights(weights)  # Update model with the latest parameters
-		loss, accuracy = test(model, testloader, device=DEVICE)
+		loss, c_loss, accuracy = test(model, testloader, device=DEVICE)
 
-		return loss, {"accuracy": accuracy}
+		return loss, {"accuracy": accuracy, "c_loss": c_loss}
 
 	return evaluate
 
@@ -54,7 +56,7 @@ if __name__ == "__main__":
 
 
 	# Optimization strategy
-	strategy = TensorboardStrategy(
+	strategy = MaliciousUpdateDetection(
 		min_fit_clients=2,
 		min_available_clients=2,
 		eval_fn=get_eval_fn(model),

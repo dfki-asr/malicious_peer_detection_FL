@@ -12,68 +12,70 @@ import flwr as fl
 import numpy as np
 
 torch.manual_seed(0)
+DEVICE='cpu'
+
 batch_size = 64
-DEVICE = "cpu"
-
-
-def get_parameters(net) -> List[np.ndarray]:
-    return [val.cpu().numpy() for _, val in net.state_dict().items()]
-
-def set_parameters(net, parameters: List[np.ndarray]):
-    params_dict = zip(net.state_dict().keys(), parameters)
-    state_dict = OrderedDict({k: torch.Tensor(v) for k, v in params_dict})
-    net.load_state_dict(state_dict, strict=True)
+local_epochs = 5
 
 
 class FlowerClient(fl.client.NumPyClient):
-    def __init__(self, net, trainloader, valloader):
-        self.net = net
+    def __init__(self, model, trainloader, valloader):
+        self.model = model
         self.trainloader = trainloader
         self.valloader = valloader
+        self.debug = 0
 
-    def get_parameters(self, config):
-        return get_parameters(self.net)
+    def get_parameters(self, config=None):
+        return [val.cpu().numpy() for _, val in self.model.state_dict().items()]
+
+    def set_parameters(self, parameters):
+        params_dict = zip(self.model.classifier.state_dict().keys(), parameters)
+        state_dict = OrderedDict({k: torch.Tensor(v) for k, v in params_dict})
+        self.model.classifier.load_state_dict(state_dict, strict=True)
 
     def fit(self, parameters, config):
-        set_parameters(self.net, parameters)
-        train(self.net, self.trainloader, epochs=1, device=DEVICE)
-        return get_parameters(self.net), len(self.trainloader), {}
+        self.set_parameters(parameters)
+        print("test", config["current_round"])
+        # print("before training", self.model.encoder.conv1.weight[0]) # for debug
+        train(self.model, self.trainloader, epochs=local_epochs, device=DEVICE)
+        # print("after training", self.model.encoder.conv1.weight[0]) # for debug
+        return self.get_parameters(), len(self.trainloader), {}
 
     def evaluate(self, parameters, config):
-        set_parameters(self.net, parameters)
-        loss, accuracy = test(self.net, self.valloader, device=DEVICE)
+        self.set_parameters(parameters)
+        loss, c_loss, accuracy = test(self.model, self.valloader, device=DEVICE)
         return float(loss), len(self.valloader), {"accuracy": float(accuracy)}
 
 
 
 if __name__ == "__main__":
-	parser = argparse.ArgumentParser()
-	parser.add_argument(
-		"--num", type=int, required=False, default=0, help="client number"
-	)
-	parser.add_argument(
-		"--malicious", action='store_true'
-	)
-	args = parser.parse_args()
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--num", type=int, required=False, default=0, help="client number"
+    )
+    parser.add_argument(
+        "--malicious", action='store_true'
+    )
+    args = parser.parse_args()
 
-	model = CVAE(dim_x=(28, 28, 1), dim_y=10, dim_z=20)
-	trainloader, testloader, _ = load_partition(args.num, batch_size)
+    model = CVAE(dim_x=(28, 28, 1), dim_y=10, dim_z=20)
+    trainloader, testloader, _ = load_partition(args.num, batch_size)
 
-	if args.num == 3:
-		writer = SummaryWriter(log_dir="./fl_logs/img")
-		imgs, labels = next(iter(trainloader))
-		if args.malicious == True:
-			for i in range(8):
-				writer.add_image(f'malicious/img-{i}-label={labels[i]}', imgs[i])
-		else:
-			for i in range(8):
-				writer.add_image(f'non-malicious/img-{i}-label={labels[i]}', imgs[i])
+    if args.num == 3:
+        writer = SummaryWriter(log_dir="./fl_logs/img")
+        imgs, labels = next(iter(trainloader))
+        if args.malicious == True:
+            for i in range(8):
+                writer.add_image(f'malicious/img-{i}-label={labels[i]}', imgs[i])
+        else:
+            for i in range(8):
+                writer.add_image(f'non-malicious/img-{i}-label={labels[i]}', imgs[i])
 
-	fl.client.start_numpy_client(
-		server_address="[::]:8080",
-		client=FlowerClient(
-			net=model,
-			trainloader=trainloader,
-			valloader=testloader
-		)
-	)
+    fl.client.start_numpy_client(
+        server_address="[::]:8080",
+        client=FlowerClient(
+            model=model,
+            trainloader=trainloader,
+            valloader=testloader
+        )
+    )
