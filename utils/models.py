@@ -11,7 +11,7 @@ flat_shape.append(784)
 PRINT_REQ = False
 cond_shape=10
 
-
+DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 class Encoder(nn.Module):
     def __init__(self, dim_x, dim_y, dim_z):
 
@@ -31,7 +31,7 @@ class Encoder(nn.Module):
         eps = torch.randn_like(std)
         return mu + eps*std
 
-    def forward(self, inputs, device="cpu"):
+    def forward(self, inputs, device=DEVICE):
         x = inputs[0].to(device)
         y = inputs[1].to(device)
 
@@ -103,7 +103,7 @@ class Decoder(nn.Module):
         self.conv = nn.Conv2d(in_channels=32, out_channels=1, kernel_size=5, stride=1,padding='same')
         
 
-    def forward(self, inputs, device="cpu"):
+    def forward(self, inputs, device=DEVICE):
         x = inputs[0].to(device)#.unsqueeze(dim=0)
         y = inputs[1].to(device)
         print_debug(f"latent space shape: {x.shape}, labels shape: {y.shape}")
@@ -149,7 +149,7 @@ class CVAE(nn.Module):
         #Decoder
         self.decoder = Decoder(dim_y=dim_y, dim_z=dim_z)
 
-    def forward(self, inputs, device="cpu"):
+    def forward(self, inputs, device=DEVICE):
         x, y = inputs      
         x = x.to(device)
         y = F.one_hot(y, 10).to(device)  
@@ -176,7 +176,7 @@ def print_debug(data):
 
 
 
-def loss_fn(recon, x, mu, logvar, c_out, y_onehot, device="cpu"):
+def loss_fn(recon, x, mu, logvar, c_out, y_onehot, device=DEVICE):
     criterion = torch.nn.BCELoss()
     y_onehot1 = y_onehot.type(torch.FloatTensor).to(device)
     # print(c_out.shape, y_onehot.shape, c_out.dtype, y_onehot.dtype)
@@ -205,7 +205,7 @@ def accuracy_fn(y_true, y_pred):
 
 
 
-def train_old(model, train_dataloader, epochs, device="cpu"):
+def train_old(model, train_dataloader, epochs, device=DEVICE):
 
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     model.train()
@@ -251,7 +251,7 @@ def train_old(model, train_dataloader, epochs, device="cpu"):
         print('====> Epoch: {} Average loss: {:.4f}\tClassifier Accuracy: {:.4f}'.format(
             epoch, train_loss / len(train_dataloader.dataset), classif_accuracy/len(train_dataloader)))
 
-def train(model, train_dataloader, epochs, device="cpu"):
+def train(model, train_dataloader, epochs, device=DEVICE):
     """Train the network on the training set."""
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     model.train()
@@ -296,7 +296,7 @@ def train(model, train_dataloader, epochs, device="cpu"):
 
 
 
-def test(model, test_dataloader, device="cpu"):
+def test(model, test_dataloader, device=DEVICE):
     #Sets the module in evaluation mode
     model.eval()
     test_loss = 0

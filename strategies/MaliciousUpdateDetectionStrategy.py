@@ -1,7 +1,7 @@
 from typing import Union, Dict, List, Optional, Tuple
 from functools import reduce
 import numpy as np
-
+import torch
 import flwr as fl
 from flwr.server.client_manager import ClientManager
 from flwr.server.client_proxy import ClientProxy
@@ -25,7 +25,7 @@ from utils.datasets import load_data
 
 dataset = "mnist"
 batch_size = 64
-DEVICE = "cpu"
+DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 class MaliciousUpdateDetection(fl.server.strategy.FedAvg):
     def __repr__(self) -> str:
@@ -74,7 +74,7 @@ class MaliciousUpdateDetection(fl.server.strategy.FedAvg):
         # Getting decoders
         if server_round == 3:
             n_decoders = 2
-            cvaes = [CVAE(dim_x=(28, 28, 1), dim_y=10, dim_z=20) for i in range(n_decoders)]
+            cvaes = [CVAE(dim_x=(28, 28, 1), dim_y=10, dim_z=20).to(DEVICE) for i in range(n_decoders)]
             for i in range(n_decoders):
                 cvaes[i].set_weights(weights_results[i][0])     # Load test data
             _, testloader, num_examples = load_data(dataset, batch_size)

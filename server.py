@@ -12,9 +12,9 @@ from strategies.MaliciousUpdateDetectionStrategy import MaliciousUpdateDetection
 
 
 torch.manual_seed(0)
-DEVICE='cpu'
-#DEVICE='cuda' if torch.cuda.is_available() else 'cpu'
-
+# DEVICE='cpu'
+DEVICE='cuda' if torch.cuda.is_available() else 'cpu'
+print(f"Server device: {DEVICE}")
 batch_size = 64
 num_rounds = 10
 dataset = "mnist"
@@ -69,7 +69,7 @@ if __name__ == "__main__":
 	)
 	
 	fl.server.start_server(
-		server_address="[::]:8080",
+		server_address="127.0.0.1:8080",
 		config=config,
 		strategy=strategy
 	)

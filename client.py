@@ -12,8 +12,9 @@ import flwr as fl
 import numpy as np
 
 torch.manual_seed(0)
-DEVICE='cpu'
-
+# DEVICE='cpu'
+DEVICE='cuda' if torch.cuda.is_available() else 'cpu'
+print(f"Client device: {DEVICE}")
 batch_size = 64
 local_epochs = 5
 
@@ -58,7 +59,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    model = CVAE(dim_x=(28, 28, 1), dim_y=10, dim_z=20)
+    model = CVAE(dim_x=(28, 28, 1), dim_y=10, dim_z=20).to(DEVICE)
     trainloader, testloader, _ = load_partition(args.num, batch_size)
 
     if args.num == 3:
@@ -72,7 +73,7 @@ if __name__ == "__main__":
                 writer.add_image(f'non-malicious/img-{i}-label={labels[i]}', imgs[i])
 
     fl.client.start_numpy_client(
-        server_address="[::]:8080",
+        server_address="127.0.0.1:8080",
         client=FlowerClient(
             model=model,
             trainloader=trainloader,
