@@ -16,7 +16,7 @@ torch.manual_seed(0)
 DEVICE='cuda' if torch.cuda.is_available() else 'cpu'
 print(f"Client device: {DEVICE}")
 batch_size = 64
-local_epochs = 5
+local_epochs = 1
 
 
 class FlowerClient(fl.client.NumPyClient):
@@ -36,10 +36,7 @@ class FlowerClient(fl.client.NumPyClient):
 
     def fit(self, parameters, config):
         self.set_parameters(parameters)
-        print("test", config["current_round"])
-        # print("before training", self.model.encoder.conv1.weight[0]) # for debug
         train(self.model, self.trainloader, epochs=local_epochs, device=DEVICE)
-        # print("after training", self.model.encoder.conv1.weight[0]) # for debug
         return self.get_parameters(), len(self.trainloader), {}
 
     def evaluate(self, parameters, config):
