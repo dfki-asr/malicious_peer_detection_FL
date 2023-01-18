@@ -7,7 +7,8 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 
 from utils.datasets import load_data
-from utils.models import test, CVAE
+from utils.models import CVAE
+from client import test
 from strategies.MaliciousUpdateDetectionStrategy import MaliciousUpdateDetection
 
 
@@ -16,11 +17,9 @@ torch.manual_seed(0)
 DEVICE='cuda' if torch.cuda.is_available() else 'cpu'
 print(f"Server device: {DEVICE}")
 batch_size = 64
-num_rounds = 10
+num_rounds = 5
 dataset = "mnist"
 
-# Global Model
-model = CVAE(dim_x=(28, 28, 1), dim_y=10, dim_z=20).to(DEVICE)
 
 # Centralized eval function
 def get_eval_fn(model):
@@ -44,6 +43,8 @@ if __name__ == "__main__":
 	)
 	args = parser.parse_args()
 
+	# Global Model
+	model = CVAE(dim_x=(28, 28, 1), dim_y=10, dim_z=20).to(DEVICE)
 
 	# SummaryWriter
 	if args.malicious == True:
