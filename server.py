@@ -17,7 +17,7 @@ torch.manual_seed(0)
 DEVICE='cuda' if torch.cuda.is_available() else 'cpu'
 print(f"Server device: {DEVICE}")
 batch_size = 64
-num_rounds = 5
+num_rounds = 20
 dataset = "mnist"
 
 
@@ -35,6 +35,17 @@ def get_eval_fn(model):
 		return loss, {"accuracy": accuracy, "c_loss": c_loss}
 
 	return evaluate
+
+
+def fig_config(server_round: int):
+	"""Return training configuration dict for each round."""
+	config = {
+		"batch_size": 64,
+		"current_round": server_round,
+		"local_epochs": 1,
+	}
+	return config
+
 
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser()
@@ -61,7 +72,8 @@ if __name__ == "__main__":
 		min_fit_clients=2,
 		min_available_clients=2,
 		eval_fn=get_eval_fn(model),
-		writer=writer
+		writer=writer,
+		on_fit_config_fn=fig_config,
 	)
 
 	# Federation config

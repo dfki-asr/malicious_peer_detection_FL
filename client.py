@@ -20,22 +20,19 @@ torch.manual_seed(0)
 DEVICE='cuda' if torch.cuda.is_available() else 'cpu'
 print(f"Client device: {DEVICE}")
 batch_size = 64
-local_epochs = 1
 
 # Hard coding values for testing purpose
 flat_shape = [784]
 cond_shape=10
 
 
-def train(model, train_dataloader, epochs, device=DEVICE):
+def train(model, train_dataloader, config, device=DEVICE):
     """Train the network on the training set."""
     log_img_dir = 'fl_logs/img/client_generation'
-    if not(os.path.isdir(log_img_dir)):
-            os.mkdir(log_img_dir)   
 
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     model.train()
-    for epoch in range(epochs):
+    for epoch in range(config["local_epochs"]):
         train_loss = 0
         classif_accuracy = 0
         for batch, (images, labels) in enumerate(train_dataloader):
@@ -73,6 +70,7 @@ def train(model, train_dataloader, epochs, device=DEVICE):
             epoch, train_loss / len(train_dataloader.dataset), classif_accuracy/len(train_dataloader)))
 
 
+    # Image generation
     model.eval()
     for i in range(2):
         sample = torch.randn(1, 20).to(DEVICE)
@@ -87,8 +85,9 @@ def train(model, train_dataloader, epochs, device=DEVICE):
         with torch.inference_mode():
             sample = model.decoder((sample, c)).to(DEVICE)
             sample = sample.reshape([1, 1, 28, 28])
-            print(f'Ending round: Generating 1 and 2')
-            save_image(sample, f'{log_img_dir}/client-{args.num}-label-{label}.png')
+            saving_path = f'{log_img_dir}/round-{config["current_round"]}'
+            os.makedirs(saving_path, exist_ok=True)
+            save_image(sample, f'{saving_path}/client-{args.num}-label-{label}.png')
 
 
 def test(model, test_dataloader, device=DEVICE):
@@ -124,7 +123,7 @@ def test(model, test_dataloader, device=DEVICE):
 
 def loss_fn(recon, x, mu, logvar, c_out, y_onehot, device=DEVICE):
     y_onehot1 = y_onehot.type(torch.FloatTensor).to(device)
-    classif_loss = criterion(c_out, y_onehot1)
+    classif_loss = torch.nn.BCELoss()(c_out, y_onehot1)
     BCE = F.binary_cross_entropy(recon, x, reduction='sum')
     KLD = -0.5*torch.sum(1+logvar-mu.pow(2)-logvar.exp())
     return classif_loss+BCE+KLD, classif_loss, BCE, KLD
@@ -165,7 +164,7 @@ class FlowerClient(fl.client.NumPyClient):
 
     def fit(self, parameters, config):
         self.set_parameters(parameters)
-        train(self.model, self.trainloader, epochs=local_epochs, device=DEVICE)
+        train(self.model, self.trainloader, config=config, device=DEVICE)
         return self.get_parameters(), len(self.trainloader), {}
 
     def evaluate(self, parameters, config):
