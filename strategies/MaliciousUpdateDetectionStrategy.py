@@ -135,11 +135,10 @@ class MaliciousUpdateDetection(fl.server.strategy.FedAvg):
         # generating 10 images per decoder to evaluate local classifiers 
         for i, cvae in enumerate(cvaes):
             classifier_accs = np.zeros(len(cvaes))
-            for j in range(2):
+            for label in range(2):
                 # generating data using decoder i
                 sample = torch.randn(1, 20).to(DEVICE)
                 c = np.zeros(shape=(sample.shape[0],))
-                label = j+1
                 c[:] = label
                 c = torch.FloatTensor(c)
                 c = c.to(torch.int64)
@@ -149,7 +148,7 @@ class MaliciousUpdateDetection(fl.server.strategy.FedAvg):
                 with torch.inference_mode():
                     sample = cvae.decoder((sample, c)).to(DEVICE)
                     sample = sample.reshape([1, 1, 28, 28])
-                    save_image(sample, f'{log_img_dir}/round-{server_round}-label-{label}.png')
+                    save_image(sample, f'{log_img_dir}/decoder-{i}-round-{server_round}-label-{label}.png')
 
                 # testing each classifier with the generated data
                 for k, model in enumerate(cvaes):

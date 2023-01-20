@@ -20,7 +20,7 @@ torch.manual_seed(0)
 DEVICE='cuda' if torch.cuda.is_available() else 'cpu'
 print(f"Client device: {DEVICE}")
 batch_size = 64
-local_epochs = 3
+local_epochs = 1
 
 # Hard coding values for testing purpose
 flat_shape = [784]
@@ -44,8 +44,6 @@ def train(model, train_dataloader, epochs, device=DEVICE):
 
             # 1. Forward pass
             mu, logvar, recon_batch, c_out = model((images, labels))
-            # print(f"---------------{torch.argmax(c_out, dim=1).shape}")
-            # print(f"---------------{y.shape}")
             flat_data = images.view(-1, flat_shape[0]).to(device)                            
             y_onehot = F.one_hot(labels, cond_shape).to(device)
             inp = torch.cat((flat_data, y_onehot), 1)
@@ -90,7 +88,7 @@ def train(model, train_dataloader, epochs, device=DEVICE):
             sample = model.decoder((sample, c)).to(DEVICE)
             sample = sample.reshape([1, 1, 28, 28])
             print(f'Ending round: Generating 1 and 2')
-            save_image(sample, f'{log_img_dir}/client-generation-label-{label}.png')
+            save_image(sample, f'{log_img_dir}/client-{args.num}-label-{label}.png')
 
 
 def test(model, test_dataloader, device=DEVICE):
@@ -125,12 +123,9 @@ def test(model, test_dataloader, device=DEVICE):
 
 
 def loss_fn(recon, x, mu, logvar, c_out, y_onehot, device=DEVICE):
-    criterion = torch.nn.BCELoss()
     y_onehot1 = y_onehot.type(torch.FloatTensor).to(device)
-    # print(c_out.shape, y_onehot.shape, c_out.dtype, y_onehot.dtype)
     classif_loss = criterion(c_out, y_onehot1)
     BCE = F.binary_cross_entropy(recon, x, reduction='sum')
-    # recons_error = criterion(recon, x)
     KLD = -0.5*torch.sum(1+logvar-mu.pow(2)-logvar.exp())
     return classif_loss+BCE+KLD, classif_loss, BCE, KLD
 
@@ -193,15 +188,16 @@ if __name__ == "__main__":
     model = CVAE(dim_x=(28, 28, 1), dim_y=10, dim_z=20).to(DEVICE)
     trainloader, testloader, _ = load_partition(args.num, batch_size)
 
-    if args.num == 3:
-        writer = SummaryWriter(log_dir="./fl_logs/img")
-        imgs, labels = next(iter(trainloader))
-        if args.malicious == True:
-            for i in range(8):
-                writer.add_image(f'malicious/img-{i}-label={labels[i]}', imgs[i])
-        else:
-            for i in range(8):
-                writer.add_image(f'non-malicious/img-{i}-label={labels[i]}', imgs[i])
+
+    # if args.num == 3:
+    #     writer = SummaryWriter(log_dir="./fl_logs/img")
+    #     imgs, labels = next(iter(trainloader))
+    #     if args.malicious == True:
+    #         for i in range(8):
+    #             writer.add_image(f'malicious/img-{i}-label={labels[i]}', imgs[i])
+    #     else:
+    #         for i in range(8):
+    #             writer.add_image(f'non-malicious/img-{i}-label={labels[i]}', imgs[i])
 
     fl.client.start_numpy_client(
         server_address="127.0.0.1:8080",

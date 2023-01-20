@@ -22,12 +22,12 @@ def generate_partitions(n_partitions, dataset, malicious=False):
     if dataset == "cifar10":
         dataset_inst = CIFAR10
         transform = transforms.Compose(
-            [transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
+            [transforms.ToTensor()]
         )
     if dataset == "mnist":
         dataset_inst = MNIST
         transform = transforms.Compose(
-            [transforms.ToTensor(), transforms.Normalize((0.5), (0.5))]
+            [transforms.ToTensor()]
         )
 
     # Load train & test sets
