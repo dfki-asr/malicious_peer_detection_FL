@@ -8,8 +8,9 @@ from torch.utils.tensorboard import SummaryWriter
 
 from utils.datasets import load_data
 from utils.models import CVAE
-from client import test
+from utils.function import test
 from strategies.MaliciousUpdateDetectionStrategy import MaliciousUpdateDetection
+from strategies.TensorboardStrategy import TensorboardStrategy
 
 
 torch.manual_seed(0)
@@ -50,7 +51,10 @@ def fig_config(server_round: int):
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser()
 	parser.add_argument(
-		"--malicious", action='store_true'
+		"--strategy", type=str, default="detection_strategy", help="Set of strategies: fedavg, detection_strategy"
+	)
+	parser.add_argument(
+		"--attack", type=str, default="label_flipping", help="Set of attacks"
 	)
 	args = parser.parse_args()
 
@@ -58,23 +62,32 @@ if __name__ == "__main__":
 	model = CVAE(dim_x=(28, 28, 1), dim_y=10, dim_z=20).to(DEVICE)
 
 	# SummaryWriter
-	if args.malicious == True:
-		writer = SummaryWriter(log_dir=f"./fl_logs/malicious")
-	else:
-		writer = SummaryWriter(log_dir=f"./fl_logs/non-malicious")
+	writer = SummaryWriter(log_dir=f"./fl_logs/")
 
 	writer.add_scalar("hp/batch_size", batch_size)
 	writer.add_scalar("hp/num_rounds", num_rounds)
+	writer.add_text("hp/strategy", args.strategy)
+	writer.add_text("hp/attack", args.attack)
 
 
 	# Optimization strategy
-	strategy = MaliciousUpdateDetection(
-		min_fit_clients=2,
-		min_available_clients=2,
-		eval_fn=get_eval_fn(model),
-		writer=writer,
-		on_fit_config_fn=fig_config,
-	)
+	if args.strategy == "detection_strategy":
+		strategy = MaliciousUpdateDetection(
+			min_fit_clients=2,
+			min_available_clients=2,
+			eval_fn=get_eval_fn(model),
+			writer=writer,
+			on_fit_config_fn=fig_config,
+		)
+	elif args.strategy == "fedavg":
+		strategy = TensorboardStrategy(
+			min_fit_clients=2,
+			min_available_clients=2,
+			eval_fn=get_eval_fn(model),
+			writer=writer,
+			on_fit_config_fn=fig_config,
+		)
+
 
 	# Federation config
 	config = fl.server.ServerConfig(
