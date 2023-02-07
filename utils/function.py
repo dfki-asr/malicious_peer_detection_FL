@@ -133,3 +133,79 @@ def accuracy_fn(y_true, y_pred):
     correct = torch.eq(y_true, y_pred).sum().item()
     acc = (correct / len(y_pred)) * 100
     return acc
+
+
+def train_label_flipping(model, train_dataloader, config, device=DEVICE, args=None):
+    """Train the network on the training set with permuted labels"""
+    log_img_dir = 'fl_logs/img/client_generation'
+    label_permutations = {
+        0: 0,
+        1: 1,
+        2: 2,
+        3: 3,
+        4: 4,
+        5: 8,
+        6: 6,
+        7: 7,
+        8: 5,
+        9: 9,
+    }
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+    model.train()
+    for epoch in range(config["local_epochs"]):
+        train_loss = 0
+        classif_accuracy = 0
+        for batch, (images, labels) in enumerate(train_dataloader):
+            images = images.to(device) #[64, 1, 28, 28]
+            labels = labels.apply_(label_permutations.get).to(device)
+
+            # 1. Forward pass
+            mu, logvar, recon_batch, c_out = model((images, labels))
+            flat_data = images.view(-1, flat_shape[0]).to(device)                            
+            y_onehot = F.one_hot(labels, cond_shape).to(device)
+            inp = torch.cat((flat_data, y_onehot), 1)
+
+            # 2. Calculate loss
+            loss, C_loss, BCE, KLD = loss_fn(recon_batch, flat_data, mu, logvar, c_out, y_onehot)
+            train_loss += loss.item()
+            classif_accuracy += accuracy_fn(labels, torch.argmax(c_out, dim=1))
+
+            # 3. Zero grad
+            optimizer.zero_grad()
+
+            # 4. Backprop
+            loss.backward()
+
+            # 5. Step
+            optimizer.step()
+
+            if batch % 10 == 0:
+                print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}\tBCE:{:.4f}\tKLD:{:.4f}\tC_loss:{:.4f}'.format(
+                    epoch,
+                    batch * len(images),
+                    len(train_dataloader.dataset),
+                    100. * batch / len(train_dataloader),
+                    loss.item() / len(images), BCE.item() / len(images), KLD.item() / len(images), C_loss.item() / len(images)))
+        print('====> Epoch: {} Average loss: {:.4f}\tClassifier Accuracy: {:.4f}'.format(
+            epoch, train_loss / len(train_dataloader.dataset), classif_accuracy/len(train_dataloader)))
+
+
+    # Image generation
+    model.eval()
+    for i in range(2):
+        sample = torch.randn(1, 20).to(DEVICE)
+        c = np.zeros(shape=(sample.shape[0],))
+        label = i+1
+        c[:] = label
+        c = torch.FloatTensor(c)
+        c = c.to(torch.int64)
+        c = c.to(DEVICE)
+        c = F.one_hot(c, cond_shape)
+        model.eval()
+        with torch.inference_mode():
+            sample = model.decoder((sample, c)).to(DEVICE)
+            sample = sample.reshape([1, 1, 28, 28])
+            saving_path = f'{log_img_dir}/round-{config["current_round"]}'
+            os.makedirs(saving_path, exist_ok=True)
+            save_image(sample, f'{saving_path}/client-{args.num}-label-{label}.png')

@@ -9,7 +9,7 @@ from utils.datasets import load_partition
 from utils.models import CVAE
 from utils.partition_data import Partition
 from utils.attacks import sign_flipping_attack, additive_noise_attack, same_value_attack
-from utils.function import train, test
+from utils.function import train, train_label_flipping, test
 
 import flwr as fl
 
@@ -42,21 +42,17 @@ class FlowerClient(fl.client.NumPyClient):
 
         elif args.attack == "label_flipping":
             self.set_parameters(parameters)
-            train(self.model, self.trainloader, config=config, device=DEVICE, args=args)
+            train_label_flipping(self.model, self.trainloader, config=config, device=DEVICE, args=args)
 
         elif args.attack == "sign_flipping":
             self.set_parameters(parameters)
             train(self.model, self.trainloader, config=config, device=DEVICE, args=args)
-            print('before - sign_flipping', self.model.classifier.state_dict())
             self.model.classifier.load_state_dict(sign_flipping_attack(self.model.classifier.state_dict()))
-            print('after - sign_flipping', self.model.classifier.state_dict())
 
         elif args.attack == "additive_noise":
             self.set_parameters(parameters)
             train(self.model, self.trainloader, config=config, device=DEVICE, args=args)
-            print('before - additive_noise', self.model.classifier.state_dict())
             self.model.classifier.load_state_dict(additive_noise_attack(self.model.classifier.state_dict(), device=DEVICE))
-            print('after - additive_noise', self.model.classifier.state_dict())
 
         elif args.attack == "same_value":
             params_dict = zip(self.model.classifier.state_dict().keys(), parameters)
