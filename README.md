@@ -12,7 +12,7 @@ bash scenarios/scenario-id.sh
 
 ***Detection Strategy vs FedAvg: Sign flipping attack (for 2 clients)***
 
-![sign_flipping](img/additive-noise-attack.png)
+![sign_flipping](img/sign-flipping-attack.png)
 
 ***Detection Strategy vs FedAvg: Same value attack (for 2 clients)***
 
