@@ -57,7 +57,7 @@ if __name__ == "__main__":
 		"--attack", type=str, default="label_flipping", help="Set of attacks"
 	)
 	args = parser.parse_args()
-
+	print(f"Running {args.strategy} for {args.attack} attack. Total number of rounds: {num_rounds}")
 	# Global Model
 	model = CVAE(dim_x=(28, 28, 1), dim_y=10, dim_z=20).to(DEVICE)
 
