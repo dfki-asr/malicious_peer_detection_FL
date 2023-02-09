@@ -18,5 +18,5 @@ python3 client.py --num 4 --attack $attack  &
 python3 client.py --num 5 --attack 'none' &
 python3 client.py --num 6 --attack $attack &
 python3 client.py --num 7 --attack $attack &
-python3 client.py --num 7 --attack $attack &
-python3 client.py --num 7 --attack 'none' 
+python3 client.py --num 8 --attack $attack &
+python3 client.py --num 9 --attack 'none' 
