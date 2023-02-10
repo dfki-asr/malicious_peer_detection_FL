@@ -1,3 +1,6 @@
+### Note for print statements
+In globals_mod, settings.py file has an option to redirect prints to stdout or file. Please choose as required
+
 ### Detecting malicious updates with GANs in FL scenarios
 
 * [FL scenarios](scenarios)
