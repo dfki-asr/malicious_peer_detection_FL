@@ -2,23 +2,32 @@ from typing import Dict, Optional, Tuple
 import argparse
 
 import flwr as fl
-
+import sys
+from globals_mod import settings
 import torch
 from torch.utils.tensorboard import SummaryWriter
-
+import os
+import time
 from utils.datasets import load_data
 from utils.models import CVAE
 from utils.function import test
+
 from strategies.MaliciousUpdateDetectionStrategy import MaliciousUpdateDetection
 from strategies.TensorboardStrategy import TensorboardStrategy
 
 
+
+if settings.print_loc == 'File':
+    sys.stdout = open('log_traces/log_'+settings.filename+'.txt','a+')
+else:
+	sys.stdout = sys.__stdout__
+
 torch.manual_seed(0)
 # DEVICE='cpu'
 DEVICE='cuda' if torch.cuda.is_available() else 'cpu'
-print(f"Server device: {DEVICE}")
+# print(f"Server device: {DEVICE}")
 batch_size = 64
-num_rounds = 20
+num_rounds = 5
 dataset = "mnist"
 
 
