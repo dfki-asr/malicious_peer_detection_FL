@@ -2,8 +2,10 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 import os
-
+from globals_mod import settings
 from torchvision.utils import save_image
+import sys
+
 
 DEVICE='cuda' if torch.cuda.is_available() else 'cpu'
 flat_shape = [784]
@@ -12,7 +14,10 @@ cond_shape=10
 # Hard coding values for testing purpose
 flat_shape = [784]
 cond_shape=10
-
+if settings.print_loc == 'File':
+    sys.stdout = open('log_traces/log_'+settings.filename+'.txt','a')
+else:
+	sys.stdout = sys.__stdout__
 torch.manual_seed(0)
 
 def train(model, train_dataloader, config, device=DEVICE, args=None):
