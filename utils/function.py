@@ -5,19 +5,17 @@ import os
 from globals_mod import settings
 from torchvision.utils import save_image
 import sys
-
+import random
+import logging
 
 DEVICE='cuda' if torch.cuda.is_available() else 'cpu'
 flat_shape = [784]
 cond_shape=10
-
+logging.basicConfig(filename="log_traces/logfilename.log", level=logging.INFO)
 # Hard coding values for testing purpose
 flat_shape = [784]
 cond_shape=10
-if settings.print_loc == 'File':
-    sys.stdout = open('log_traces/log_'+settings.filename+'.txt','a')
-else:
-	sys.stdout = sys.__stdout__
+
 torch.manual_seed(0)
 
 def train(model, train_dataloader, config, device=DEVICE, args=None):
@@ -60,7 +58,16 @@ def train(model, train_dataloader, config, device=DEVICE, args=None):
                     len(train_dataloader.dataset),
                     100. * batch / len(train_dataloader),
                     loss.item() / len(images), BCE.item() / len(images), KLD.item() / len(images), C_loss.item() / len(images)))
+                logging.info('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}\tBCE:{:.4f}\tKLD:{:.4f}\tC_loss:{:.4f}'.format(
+                    epoch,
+                    batch * len(images),
+                    len(train_dataloader.dataset),
+                    100. * batch / len(train_dataloader),
+                    loss.item() / len(images), BCE.item() / len(images), KLD.item() / len(images), C_loss.item() / len(images)))
         print('====> Epoch: {} Average loss: {:.4f}\tClassifier Accuracy: {:.4f}'.format(
+            epoch, train_loss / len(train_dataloader.dataset), classif_accuracy/len(train_dataloader)))
+            
+        logging.info('====> Epoch: {} Average loss: {:.4f}\tClassifier Accuracy: {:.4f}'.format(
             epoch, train_loss / len(train_dataloader.dataset), classif_accuracy/len(train_dataloader)))
 
 
@@ -143,18 +150,14 @@ def accuracy_fn(y_true, y_pred):
 def train_label_flipping(model, train_dataloader, config, device=DEVICE, args=None):
     """Train the network on the training set with permuted labels"""
     log_img_dir = 'fl_logs/img/client_generation'
-    label_permutations = {
-        0: 0,
-        1: 1,
-        2: 2,
-        3: 3,
-        4: 4,
-        5: 8,
-        6: 6,
-        7: 7,
-        8: 5,
-        9: 9,
-    }
+
+    ####### Picking 4 random classes to swap between ################
+    random.seed(args.seed)
+    nums = random.sample(range(0,9), 4)
+    print(f'Çlasses swapped: {nums[0]} and {nums[1]}, {nums[2]} and {nums[3]}')
+    logging.info(f'Çlasses swapped: {nums[0]} and {nums[1]}, {nums[2]} and {nums[3]}')
+
+    ########
 
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     model.train()
@@ -163,7 +166,21 @@ def train_label_flipping(model, train_dataloader, config, device=DEVICE, args=No
         classif_accuracy = 0
         for batch, (images, labels) in enumerate(train_dataloader):
             images = images.to(device) #[64, 1, 28, 28]
-            labels = labels.apply_(label_permutations.get).to(device)
+            # labels = labels.apply_(label_permutations.get).to(device)
+            labels = labels.to(device)
+            
+            ####### Actual Swapping Of Labels #####
+            for idx in range(len(labels)):
+                if labels[idx] == nums[0]:
+                    labels[idx] = nums[1]
+                elif labels[idx] == nums[1]:
+                    labels[idx] = nums[0]
+                elif labels[idx] == nums[2]:
+                    labels[idx] = nums[3]
+                elif labels[idx] == nums[3]:
+                    labels[idx] = nums[2]
+
+            #########
 
             # 1. Forward pass
             mu, logvar, recon_batch, c_out = model((images, labels))

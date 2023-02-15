@@ -1,6 +1,6 @@
 from typing import Dict, Optional, Tuple
 import argparse
-
+import logging
 import flwr as fl
 import sys
 from globals_mod import settings
@@ -17,17 +17,14 @@ from strategies.TensorboardStrategy import TensorboardStrategy
 
 
 
-if settings.print_loc == 'File':
-    sys.stdout = open('log_traces/log_'+settings.filename+'.txt','a+')
-else:
-	sys.stdout = sys.__stdout__
+
 
 torch.manual_seed(0)
 # DEVICE='cpu'
 DEVICE='cuda' if torch.cuda.is_available() else 'cpu'
 # print(f"Server device: {DEVICE}")
 batch_size = 64
-num_rounds = 5
+num_rounds =20
 dataset = "mnist"
 
 
@@ -58,6 +55,7 @@ def fig_config(server_round: int):
 
 
 if __name__ == "__main__":
+	logging.basicConfig(filename="log_traces/logfilename.log", level=logging.INFO)
 	parser = argparse.ArgumentParser()
 	parser.add_argument(
 		"--strategy", type=str, default="detection_strategy", help="Set of strategies: fedavg, detection_strategy"
@@ -67,6 +65,7 @@ if __name__ == "__main__":
 	)
 	args = parser.parse_args()
 	print(f"Running {args.strategy} for {args.attack} attack. Total number of rounds: {num_rounds}")
+	logging.info(f"Running {args.strategy} for {args.attack} attack. Total number of rounds: {num_rounds}")
 	# Global Model
 	model = CVAE(dim_x=(28, 28, 1), dim_y=10, dim_z=20).to(DEVICE)
 

@@ -10,15 +10,16 @@ from utils.models import CVAE
 from utils.partition_data import Partition
 from utils.attacks import sign_flipping_attack, additive_noise_attack, same_value_attack
 from utils.function import train, train_label_flipping, test
-
+import logging
 import flwr as fl
 
 torch.manual_seed(0)
 # DEVICE='cpu'
 DEVICE='cuda' if torch.cuda.is_available() else 'cpu'
 print(f"Client device: {DEVICE}")
+logging.info(f"Client device: {DEVICE}")
 batch_size = 64
-
+logging.basicConfig(filename="log_traces/logfilename.log", level=logging.INFO)
 
 class FlowerClient(fl.client.NumPyClient):
     def __init__(self, model, trainloader, valloader):
@@ -78,6 +79,9 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--num", type=int, required=False, default=0, help="client number"
+    )
+    parser.add_argument(
+        "--seed", type=int, required=False, default=0, help="random seed for flipping labels"
     )
     args = parser.parse_args()
 
