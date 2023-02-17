@@ -72,7 +72,7 @@ class MaliciousUpdateDetection(fl.server.strategy.FedAvg):
         ]
 
         # Retreiving CVAEs from each client
-        n_decoders = 10
+        n_decoders = len(weights_results)
         cvaes = [CVAE(dim_x=(28, 28, 1), dim_y=10, dim_z=20).to(DEVICE) for i in range(n_decoders)]
         for i in range(n_decoders):
             cvaes[i].set_weights(weights_results[i][0])
