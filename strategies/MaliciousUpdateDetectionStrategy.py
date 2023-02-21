@@ -41,12 +41,14 @@ class MaliciousUpdateDetection(fl.server.strategy.FedAvg):
         self,
         min_fit_clients,
         min_available_clients,
+        fraction_fit,
         eval_fn,
         writer,
         on_fit_config_fn):
 
         super().__init__(min_fit_clients=min_fit_clients, 
                         min_available_clients=min_available_clients, 
+                        fraction_fit=fraction_fit,
                         evaluate_fn=eval_fn,
                         on_fit_config_fn=on_fit_config_fn)
         self.writer = writer

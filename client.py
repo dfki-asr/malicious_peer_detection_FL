@@ -83,6 +83,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--seed", type=int, required=False, default=0, help="random seed for flipping labels"
     )
+    parser.add_argument(
+        "--server_address", type=str, required=False, default="127.0.0.1:8080", help="gRPC server address"
+    )
     args = parser.parse_args()
 
     model = CVAE(dim_x=(28, 28, 1), dim_y=10, dim_z=20).to(DEVICE)
@@ -100,7 +103,7 @@ if __name__ == "__main__":
     #             writer.add_image(f'non-malicious/img-{i}-label={labels[i]}', imgs[i])
 
     fl.client.start_numpy_client(
-        server_address="127.0.0.1:8080",
+        server_address=args.server_address,
         client=FlowerClient(
             model=model,
             trainloader=trainloader,
