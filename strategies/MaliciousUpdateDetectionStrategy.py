@@ -44,7 +44,8 @@ class MaliciousUpdateDetection(fl.server.strategy.FedAvg):
         fraction_fit,
         eval_fn,
         writer,
-        on_fit_config_fn):
+        on_fit_config_fn,
+        server_lr):
 
         super().__init__(min_fit_clients=min_fit_clients, 
                         min_available_clients=min_available_clients, 
@@ -52,6 +53,8 @@ class MaliciousUpdateDetection(fl.server.strategy.FedAvg):
                         evaluate_fn=eval_fn,
                         on_fit_config_fn=on_fit_config_fn)
         self.writer = writer
+        self.server_lr = server_lr
+        self.global_parameters = []
 
 
     def aggregate_fit(
@@ -84,12 +87,17 @@ class MaliciousUpdateDetection(fl.server.strategy.FedAvg):
             benign_indices = self.final_eval(cvaes, server_round)
             weights_results = [weights_results[i] for i in benign_indices]
 
-        parameters_aggregated = ndarrays_to_parameters(self.aggregate(weights_results))
+        # parameters_aggregated = ndarrays_to_parameters(self.aggregate(weights_results))
+
+        if server_round == 1:
+            self.global_parameters = self.aggregate(weights_results)
+        else:
+            self.global_parameters = np.multiply(self.global_parameters, 1 - self.server_lr) + np.multiply(self.aggregate(weights_results), self.server_lr)
 
         # Aggregate custom metrics if aggregation fn was provided
         metrics_aggregated = {}
 
-        return parameters_aggregated, metrics_aggregated
+        return ndarrays_to_parameters(self.global_parameters), metrics_aggregated
 
 
     def aggregate(self, results: List[Tuple[NDArrays, int]]) -> NDArrays:

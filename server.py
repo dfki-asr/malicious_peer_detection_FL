@@ -73,6 +73,9 @@ if __name__ == "__main__":
 	parser.add_argument(
 		"--min_fit_clients", type=int, required=False, default=2, help="Minimum number of clients selected on each rounds"
 	)
+	parser.add_argument(
+		"--server_lr", type=float, required=False, default=1, help="Server learning rate: [0, 1]"
+	)
 
 	args = parser.parse_args()
 	print(f"Running {args.strategy} for {args.attack} attack. Total number of rounds: {args.num_rounds}")
@@ -98,6 +101,7 @@ if __name__ == "__main__":
 			eval_fn=get_eval_fn(model),
 			writer=writer,
 			on_fit_config_fn=fig_config,
+			server_lr=args.server_lr,
 		)
 	elif args.strategy == "fedavg":
 		strategy = TensorboardStrategy(
