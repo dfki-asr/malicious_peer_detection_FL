@@ -1,5 +1,6 @@
 from typing import Union, Dict, List, Optional, Tuple
 from functools import reduce
+import psutil
 
 import flwr as fl
 from flwr.server.client_manager import ClientManager
@@ -55,7 +56,20 @@ class MaliciousUpdateDetection(fl.server.strategy.FedAvg):
         self.writer = writer
         self.server_lr = server_lr
         self.global_parameters = []
+        self.bytes_recv_init_counter = psutil.net_io_counters().bytes_recv
+        self.bytes_sent_init_counter = psutil.net_io_counters().bytes_sent
 
+
+    def configure_fit(
+        self, server_round, parameters, client_manager
+    ):
+        """Configure the next round of training."""
+        clients_conf = super().configure_fit(server_round, parameters, client_manager)
+
+        self.writer.add_scalar("Training/total_num_clients", len(clients_conf), server_round)
+
+        # Return client/config pairs
+        return clients_conf
 
     def aggregate_fit(
         self,
@@ -84,7 +98,7 @@ class MaliciousUpdateDetection(fl.server.strategy.FedAvg):
 
         # Evaluating performance of local classifiers on synthetic data, and discarding malicious updates
         if server_round > 1:
-            benign_indices = self.final_eval(cvaes, server_round)
+            benign_indices = self.eval_local_updates(cvaes, server_round)
             weights_results = [weights_results[i] for i in benign_indices]
 
         # parameters_aggregated = ndarrays_to_parameters(self.aggregate(weights_results))
@@ -92,7 +106,8 @@ class MaliciousUpdateDetection(fl.server.strategy.FedAvg):
         if server_round == 1:
             self.global_parameters = self.aggregate(weights_results)
         else:
-            self.global_parameters = np.multiply(self.global_parameters, 1 - self.server_lr) + np.multiply(self.aggregate(weights_results), self.server_lr)
+            self.global_parameters = [global_layer * (1 - self.server_lr) + local_layer * self.server_lr \
+                 for global_layer, local_layer in zip(self.global_parameters, self.aggregate(weights_results))]
 
         # Aggregate custom metrics if aggregation fn was provided
         metrics_aggregated = {}
@@ -126,11 +141,13 @@ class MaliciousUpdateDetection(fl.server.strategy.FedAvg):
         self.writer.add_scalar("Training/test_loss", loss, server_round)
         self.writer.add_scalar("Training/test_accuracy", metrics["accuracy"], server_round)
         self.writer.add_scalar("Training/test_c_loss", metrics["c_loss"], server_round)
+        self.writer.add_scalar("System/bytes_rcv", (psutil.net_io_counters().bytes_recv - self.bytes_recv_init_counter) / 1000000, server_round)
+        self.writer.add_scalar("System/bytes_sent", (psutil.net_io_counters().bytes_sent - self.bytes_sent_init_counter) / 1000000, server_round)
 
         return loss, metrics
 
 
-    def final_eval(self, cvaes, server_round):
+    def eval_local_updates(self, cvaes, server_round):
         """Evaluating performance of the local classifiers using synthetic data"""
 
         log_img_dir = f'fl_logs/img/server_generation/round-{server_round}'

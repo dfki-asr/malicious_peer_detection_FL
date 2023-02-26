@@ -173,3 +173,28 @@ def print_debug(data):
         print(data)
     else:
         pass
+
+
+class Classifier(nn.Module):
+    def __init__(self, dim_y):
+        super().__init__()
+        self.classifier = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(in_features=flat_shape[0], out_features=128),
+            nn.ReLU(),
+            nn.Linear(in_features=128, out_features=dim_y),
+            nn.Softmax(dim=-1)
+        )
+
+    def forward(self, inputs, device=DEVICE):
+        x, y = inputs      
+        x = x.to(device)
+        c_out = self.classifier(x)
+        return c_out
+
+    def set_weights(self, weights):
+        """Set model weights from a list of NumPy ndarrays."""
+        state_dict = OrderedDict(
+            {k: torch.tensor(v) for k, v in zip(self.state_dict().keys(), weights)}
+        )
+        self.load_state_dict(state_dict, strict=True)

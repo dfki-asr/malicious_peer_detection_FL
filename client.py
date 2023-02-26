@@ -6,10 +6,10 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 
 from utils.datasets import load_partition
-from utils.models import CVAE
+from utils.models import CVAE, Classifier
 from utils.partition_data import Partition
 from utils.attacks import sign_flipping_attack, additive_noise_attack, same_value_attack
-from utils.function import train, train_label_flipping, test
+from utils.function import train, train_standard_classifier, test, test_standard_classifier
 import logging
 import flwr as fl
 
@@ -39,20 +39,32 @@ class FlowerClient(fl.client.NumPyClient):
     def fit(self, parameters, config):
         if args.attack == 'none':
             self.set_parameters(parameters)
-            train(self.model, self.trainloader, config=config, device=DEVICE, args=args)
+            if args.model == 'cvae':
+                train(self.model, self.trainloader, config=config, device=DEVICE, args=args)
+            else:
+                train_standard_classifier(self.model, self.trainloader, config=config, device=DEVICE, args=args)
 
         elif args.attack == "label_flipping":
             self.set_parameters(parameters)
-            train_label_flipping(self.model, self.trainloader, config=config, device=DEVICE, args=args)
+            if args.model == 'cvae':
+                train(self.model, self.trainloader, config=config, label_flipping=True, device=DEVICE, args=args)
+            else:
+                train_standard_classifier(self.model, self.trainloader, config=config, label_flipping=True, device=DEVICE, args=args)
 
         elif args.attack == "sign_flipping":
             self.set_parameters(parameters)
-            train(self.model, self.trainloader, config=config, device=DEVICE, args=args)
+            if args.model == 'cvae':
+                train(self.model, self.trainloader, config=config, device=DEVICE, args=args)
+            else:
+                train_standard_classifier(self.model, self.trainloader, config=config, device=DEVICE, args=args)
             self.model.classifier.load_state_dict(sign_flipping_attack(self.model.classifier.state_dict()))
 
         elif args.attack == "additive_noise":
             self.set_parameters(parameters)
-            train(self.model, self.trainloader, config=config, device=DEVICE, args=args)
+            if args.model == 'cvae':
+                train(self.model, self.trainloader, config=config, device=DEVICE, args=args)
+            else:
+                train_standard_classifier(self.model, self.trainloader, config=config, device=DEVICE, args=args)
             self.model.classifier.load_state_dict(additive_noise_attack(self.model.classifier.state_dict(), device=DEVICE))
 
         elif args.attack == "same_value":
@@ -64,7 +76,12 @@ class FlowerClient(fl.client.NumPyClient):
 
     def evaluate(self, parameters, config):
         self.set_parameters(parameters)
-        loss, c_loss, accuracy = test(self.model, self.valloader, device=DEVICE)
+
+        if args.model == "cvae":
+            loss, c_loss, accuracy = test(self.model, self.valloader, device=DEVICE)
+        else:
+            loss, accuracy = test_standard_classifier(self.model, self.valloader, device=DEVICE)
+
         return float(loss), len(self.valloader), {"accuracy": float(accuracy)}
 
 
@@ -72,8 +89,8 @@ class FlowerClient(fl.client.NumPyClient):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-		"--strategy", action='store_true', default="detection_strategy", help="Set of strategies: fedavg, detection_strategy"
-	)
+        "--model", type=str, default="cvae", help="Model to train: cvae, classifier"
+    )
     parser.add_argument(
         "--attack", type=str, required=False, default="none", help="Set of attacks"
     )
@@ -88,19 +105,12 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    model = CVAE(dim_x=(28, 28, 1), dim_y=10, dim_z=20).to(DEVICE)
+    if args.model == 'cvae':
+        model = CVAE(dim_x=(28, 28, 1), dim_y=10, dim_z=20).to(DEVICE)
+    else:
+        model = Classifier(dim_y=10).to(DEVICE)
+
     trainloader, testloader, _ = load_partition(args.num, batch_size)
-
-
-    # if args.num == 3:
-    #     writer = SummaryWriter(log_dir="./fl_logs/img")
-    #     imgs, labels = next(iter(trainloader))
-    #     if args.malicious == True:
-    #         for i in range(8):
-    #             writer.add_image(f'malicious/img-{i}-label={labels[i]}', imgs[i])
-    #     else:
-    #         for i in range(8):
-    #             writer.add_image(f'non-malicious/img-{i}-label={labels[i]}', imgs[i])
 
     fl.client.start_numpy_client(
         server_address=args.server_address,
