@@ -41,7 +41,7 @@ class FedMedian(TensorboardStrategy):
         self.writer = writer
 
     def __repr__(self) -> str:
-        return "Krum"
+        return "FedMedian"
 
 
     def aggregate_fit(

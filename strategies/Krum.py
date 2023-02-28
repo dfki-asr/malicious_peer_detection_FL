@@ -44,7 +44,7 @@ class Krum(TensorboardStrategy):
         self.num_clients_to_keep = num_clients_to_keep
 
     def __repr__(self) -> str:
-        return "FedMedian"
+        return "Krum"
 
 
     def aggregate_fit(
