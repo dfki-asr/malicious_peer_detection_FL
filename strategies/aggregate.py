@@ -2,8 +2,11 @@ from functools import reduce
 from typing import List, Tuple
 
 import numpy as np
+import torch
+import copy
 
 from flwr.common import NDArray, NDArrays
+from utils.models import VAE
 
 
 def aggregate(results: List[Tuple[NDArrays, int]]) -> NDArrays:
@@ -90,3 +93,51 @@ def _compute_distances(weights: List[NDArrays]) -> NDArray:
             norm = np.linalg.norm(delta)  # type: ignore
             distance_matrix[i, j] = norm**2
     return distance_matrix
+
+
+def aggregate_spectral(results: List[Tuple[NDArrays, int]], vae, device) -> NDArrays:
+    """Compute weighted average."""
+    # Using the VAE to compute reconstruction score of local updates
+    vae.eval()
+
+    weights = [weights for weights, num_examples in results]
+    num_examples = [num_examples for weights, num_examples in results]
+
+    user_one_d = []
+    for w_local in weights:
+        tmp = np.array([])
+        for layer in w_local:
+            for w in layer:
+                data_idx_key = np.array(w).flatten()
+                tmp = copy.deepcopy(np.hstack((tmp, data_idx_key)))
+        user_one_d.append(tmp)
+
+    torch.tensor(user_one_d).to(device)
+
+    scores = vae.test(user_one_d, device=device)
+    print("scores: ", scores)
+    score_avg = np.mean(scores)
+    print("score_avg: ", score_avg)
+
+    benign_indices = []
+    for i, score in enumerate(scores):
+        if score <= score_avg:
+            benign_indices.append(i)
+
+    print("benign_indices: ", benign_indices)
+
+    weights = [weights[i] for i in benign_indices]
+    num_examples = [num_examples[i] for i in benign_indices]
+    num_examples_total = sum([num_example for num_example in num_examples])
+
+    # Create a list of weights, each multiplied by the related number of examples
+    weighted_weights = [
+        [layer * num_examples for layer in weights] for weights, num_examples in zip(weights, num_examples)
+    ]
+
+    # Compute average weights of each layer
+    weights_prime: NDArrays = [
+        reduce(np.add, layer_updates) / num_examples_total
+        for layer_updates in zip(*weighted_weights)
+    ]
+    return weights_prime

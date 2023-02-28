@@ -5,16 +5,19 @@ import flwr as fl
 import sys
 import torch
 from torch.utils.tensorboard import SummaryWriter
+import numpy as np
+import copy
 import os
 import time
 from utils.datasets import load_data
-from utils.models import CVAE, Classifier
-from utils.function import test, test_standard_classifier
+from utils.models import CVAE, Classifier, LogisticRegression
+from utils.function import test, test_standard_classifier, test_regression
 
 from strategies.MaliciousUpdateDetectionStrategy import MaliciousUpdateDetection
 from strategies.TensorboardStrategy import TensorboardStrategy
 from strategies.FedMedian import FedMedian
 from strategies.Krum import Krum
+from strategies.Spectral import Spectral
 
 
 
@@ -39,8 +42,11 @@ def get_eval_fn(model):
 		if args.model == "cvae":
 			loss, c_loss, accuracy = test(model, testloader, device=DEVICE)
 			return loss, {"accuracy": accuracy, "c_loss": c_loss}
-		else:
+		elif args.model == 'classifier':
 			loss, accuracy = test_standard_classifier(model, testloader, device=DEVICE)
+			return loss, {"accuracy": accuracy}
+		elif args.model == 'regression':
+			loss, accuracy = test_regression(model, testloader, device=DEVICE)
 			return loss, {"accuracy": accuracy}
 
 
@@ -94,8 +100,10 @@ if __name__ == "__main__":
 	# Global Model
 	if args.model == 'cvae':
 		model = CVAE(dim_x=(28, 28, 1), dim_y=10, dim_z=20).to(DEVICE)
-	else:
+	elif args.model == 'classifier':
 		model = Classifier(dim_y=10).to(DEVICE)
+	elif args.model == 'regression':
+		model = LogisticRegression(input_size=784, num_classes=10).to(DEVICE)
 
 	# SummaryWriter
 	writer = SummaryWriter(log_dir=f"./fl_logs/", filename_suffix=f'{args.attack}-{args.strategy}')
@@ -146,6 +154,24 @@ if __name__ == "__main__":
 			eval_fn=get_eval_fn(model),
 			writer=writer,
 			on_fit_config_fn=fig_config,
+		)
+	elif args.strategy == "spectral":
+		flat_model_shape = np.array([])
+
+		state_dict = copy.deepcopy(model).cpu().state_dict()
+		for key in state_dict:
+			data_idx_key = np.array(state_dict[key]).flatten()
+			flat_model_shape = copy.deepcopy(np.hstack((flat_model_shape, data_idx_key)))
+		flat_model_shape = flat_model_shape.shape[0]
+
+		strategy = Spectral(
+			min_fit_clients=args.min_fit_clients,
+			min_available_clients=args.min_available_clients,
+			fraction_fit=args.fraction_fit,
+			eval_fn=get_eval_fn(model),
+			writer=writer,
+			on_fit_config_fn=fig_config,
+			flat_model_shape=flat_model_shape,
 		)
 
 
