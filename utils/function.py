@@ -118,7 +118,7 @@ def train(model, train_dataloader, config, label_flipping=False, device=DEVICE, 
 def train_standard_classifier(model, train_dataloader, config, label_flipping=False, device=DEVICE, args=None):
     """Train the network on the training set."""
     
-if label_flipping:
+    if label_flipping:
     ####### Picking 4 random classes to swap between ################
         # random.seed(args.seed)
         # nums = random.sample(range(0,9), 4)
@@ -190,7 +190,7 @@ if label_flipping:
 def train_regression(model, train_dataloader, config, label_flipping=False, device=DEVICE, args=None):
     """Train the network on the training set."""
     
-if label_flipping:
+    if label_flipping:
     ####### Picking 4 random classes to swap between ################
         # random.seed(args.seed)
         # nums = random.sample(range(0,9), 4)
