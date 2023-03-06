@@ -1,6 +1,7 @@
 import os
 import argparse
 import numpy as np
+from typing import Dict, List, Tuple
 
 import torch
 from torch.utils.data import random_split
@@ -14,7 +15,7 @@ import torchvision.transforms as transforms
 from PIL import Image
 
 
-def generate_partitions(n_partitions, dataset, malicious=False):
+def random_partitions(n_partitions, dataset, malicious=False):
     torch.manual_seed(0)
     os.makedirs('/tmp/app/data/train', exist_ok=True)
     os.makedirs('/tmp/app/data/test', exist_ok=True)
@@ -107,6 +108,76 @@ def generate_partitions(n_partitions, dataset, malicious=False):
         torch.save(test_subset, f"/tmp/app/data/test/test_subset-{i}.pth")
 
 
+def dirichlet_partitions(
+    dataset: Dataset,
+    num_clients: int,
+    alpha: float,
+    transform=None,
+) -> Tuple[List[Dataset], Dict]:
+    np.random.seed(0)
+    
+    NUM_CLASS = len(dataset.classes)
+    MIN_SIZE = 0
+    X = [[] for _ in range(num_clients)]
+    Y = [[] for _ in range(num_clients)]
+    if not isinstance(dataset.targets, np.ndarray):
+        dataset.targets = np.array(dataset.targets, dtype=np.int64)
+    idx = [np.where(dataset.targets == i)[0] for i in range(NUM_CLASS)]
+
+    while MIN_SIZE < 10:
+        idx_batch = [[] for _ in range(num_clients)]
+        for k in range(NUM_CLASS):
+            np.random.shuffle(idx[k])
+            distributions = np.random.dirichlet(np.repeat(alpha, num_clients))
+            distributions = np.array(
+                [
+                    p * (len(idx_j) < len(dataset) / num_clients)
+                    for p, idx_j in zip(distributions, idx_batch)
+                ]
+            )
+            distributions = distributions / distributions.sum()
+            distributions = (np.cumsum(distributions) * len(idx[k])).astype(int)[:-1]
+            idx_batch = [
+                np.concatenate((idx_j, idx.tolist())).astype(np.int64)
+                for idx_j, idx in zip(idx_batch, np.split(idx[k], distributions))
+            ]
+            MIN_SIZE = min([len(idx_j) for idx_j in idx_batch])
+
+        for i in range(num_clients):
+            np.random.shuffle(idx_batch[k])
+            X[i] = dataset.data[idx_batch[i]]
+            Y[i] = dataset.targets[idx_batch[i]]
+
+    transform = transforms.Compose(
+        [transforms.ToTensor()]
+    )
+
+    datasets = [
+        Partition(
+            data=X[j],
+            targets=Y[j],
+            transform=transform
+        )
+        for j in range(num_clients)
+    ]
+    return datasets
+
+
+def generate_partitions(trainset, testset, n_partitions, alpha):
+    os.makedirs('/tmp/app/data/train', exist_ok=True)
+    os.makedirs('/tmp/app/data/test', exist_ok=True)
+
+    train_subsets = dirichlet_partitions(dataset=trainset, num_clients=n_partitions, alpha=alpha)
+    test_subsets = dirichlet_partitions(dataset=testset, num_clients=n_partitions, alpha=alpha)
+
+    # Save subsets
+    for i, (train_subset, test_subset) in enumerate(zip(train_subsets, test_subsets)):
+        print(f"subset {i}: {len(train_subset)} train data, {len(test_subset)} test data")
+
+        torch.save(train_subset, f"/tmp/app/data/train/train_subset-{i}.pth")
+        torch.save(test_subset, f"/tmp/app/data/test/test_subset-{i}.pth")
+
+
 class Partition(Dataset):
     def __init__(self, data, targets, transform = None):
         self.data = data
@@ -138,18 +209,27 @@ if __name__ == "__main__":
     # parser
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--n_partitions", type=int, required=True, help="number of partitions"
+        "--n_partitions", type=int, required=False, default=100, help="number of partitions"
     )
     parser.add_argument(
-        "--dataset", type=str, required=True, help="dataset"
+        "--dataset", type=str, required=False, default="mnist", help="dataset"
     )
     parser.add_argument(
-        "--malicious", action='store_true'
+        "--alpha", type=float, required=False, default=10
     )
     args = parser.parse_args()
 
+    # Load train & test sets
+    trainset = MNIST(
+        root="/tmp/app/data", train=True, download=True
+    )
+    testset = MNIST(
+        root="/tmp/app/data", train=False, download=False
+    )
+
     generate_partitions(
-        dataset=args.dataset,
+        trainset=trainset,
+        testset=testset,
         n_partitions=args.n_partitions,
-        malicious=args.malicious
+        alpha=args.alpha,
     )
