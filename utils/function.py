@@ -18,6 +18,8 @@ flat_shape = [784]
 cond_shape=10
 
 torch.manual_seed(0)
+# label_flipping_indices = [[7,5], [4,2]]
+label_flipping_indices = [[7,5]]
 
 def train(model, train_dataloader, config, label_flipping=False, device=DEVICE, args=None):
     """Train the network on the training set."""
@@ -25,10 +27,14 @@ def train(model, train_dataloader, config, label_flipping=False, device=DEVICE, 
     
     if label_flipping:
     ####### Picking 4 random classes to swap between ################
-        random.seed(args.seed)
-        nums = random.sample(range(0,9), 4)
-        print(f'Çlasses swapped: {nums[0]} and {nums[1]}, {nums[2]} and {nums[3]}')
-        logging.info(f'Çlasses swapped: {nums[0]} and {nums[1]}, {nums[2]} and {nums[3]}')
+        # random.seed(args.seed)
+        # nums = random.sample(range(0,9), 4)
+
+        print(f'Çlasses swapped: ')
+        logging.info(f'Çlasses swapped: ')
+        for label_flip in label_flipping_indices:
+            print(f'{label_flip[0]} and {label_flip[1]}')
+            logging.info(f'{label_flip[0]} and {label_flip[1]}')
 
 
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
@@ -42,15 +48,12 @@ def train(model, train_dataloader, config, label_flipping=False, device=DEVICE, 
             
             if label_flipping:
             ####### Actual Swapping Of Labels #####
-                for idx in range(len(labels)):
-                    if labels[idx] == nums[0]:
-                        labels[idx] = nums[1]
-                    elif labels[idx] == nums[1]:
-                        labels[idx] = nums[0]
-                    elif labels[idx] == nums[2]:
-                        labels[idx] = nums[3]
-                    elif labels[idx] == nums[3]:
-                        labels[idx] = nums[2]
+                for label_flip in label_flipping_indices:
+                    for idx in range(len(labels)):
+                        if labels[idx] == label_flip[0]:
+                            labels[idx] = label_flip[1]
+                        elif labels[idx] == label_flip[1]:
+                            labels[idx] = label_flip[0]
 
             # 1. Forward pass
             mu, logvar, recon_batch, c_out = model((images, labels))
@@ -115,12 +118,16 @@ def train(model, train_dataloader, config, label_flipping=False, device=DEVICE, 
 def train_standard_classifier(model, train_dataloader, config, label_flipping=False, device=DEVICE, args=None):
     """Train the network on the training set."""
     
-    if label_flipping:
+if label_flipping:
     ####### Picking 4 random classes to swap between ################
-        random.seed(args.seed)
-        nums = random.sample(range(0,9), 4)
-        print(f'Çlasses swapped: {nums[0]} and {nums[1]}, {nums[2]} and {nums[3]}')
-        logging.info(f'Çlasses swapped: {nums[0]} and {nums[1]}, {nums[2]} and {nums[3]}')
+        # random.seed(args.seed)
+        # nums = random.sample(range(0,9), 4)
+
+        print(f'Çlasses swapped: ')
+        logging.info(f'Çlasses swapped: ')
+        for label_flip in label_flipping_indices:
+            print(f'{label_flip[0]} and {label_flip[1]}')
+            logging.info(f'{label_flip[0]} and {label_flip[1]}')
 
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     model.train()
@@ -133,15 +140,12 @@ def train_standard_classifier(model, train_dataloader, config, label_flipping=Fa
             
             if label_flipping:
             ####### Actual Swapping Of Labels #####
-                for idx in range(len(labels)):
-                    if labels[idx] == nums[0]:
-                        labels[idx] = nums[1]
-                    elif labels[idx] == nums[1]:
-                        labels[idx] = nums[0]
-                    elif labels[idx] == nums[2]:
-                        labels[idx] = nums[3]
-                    elif labels[idx] == nums[3]:
-                        labels[idx] = nums[2]
+                for label_flip in label_flipping_indices:
+                    for idx in range(len(labels)):
+                        if labels[idx] == label_flip[0]:
+                            labels[idx] = label_flip[1]
+                        elif labels[idx] == label_flip[1]:
+                            labels[idx] = label_flip[0]
 
 
             # 1. Forward pass
@@ -186,12 +190,16 @@ def train_standard_classifier(model, train_dataloader, config, label_flipping=Fa
 def train_regression(model, train_dataloader, config, label_flipping=False, device=DEVICE, args=None):
     """Train the network on the training set."""
     
-    if label_flipping:
+if label_flipping:
     ####### Picking 4 random classes to swap between ################
-        random.seed(args.seed)
-        nums = random.sample(range(0,9), 4)
-        print(f'Çlasses swapped: {nums[0]} and {nums[1]}, {nums[2]} and {nums[3]}')
-        logging.info(f'Çlasses swapped: {nums[0]} and {nums[1]}, {nums[2]} and {nums[3]}')
+        # random.seed(args.seed)
+        # nums = random.sample(range(0,9), 4)
+
+        print(f'Çlasses swapped: ')
+        logging.info(f'Çlasses swapped: ')
+        for label_flip in label_flipping_indices:
+            print(f'{label_flip[0]} and {label_flip[1]}')
+            logging.info(f'{label_flip[0]} and {label_flip[1]}')
 
     optimizer = torch.optim.SGD(model.parameters(), lr=1e-3)
     loss_func = nn.CrossEntropyLoss()
@@ -206,15 +214,12 @@ def train_regression(model, train_dataloader, config, label_flipping=False, devi
             
             if label_flipping:
             ####### Actual Swapping Of Labels #####
-                for idx in range(len(labels)):
-                    if labels[idx] == nums[0]:
-                        labels[idx] = nums[1]
-                    elif labels[idx] == nums[1]:
-                        labels[idx] = nums[0]
-                    elif labels[idx] == nums[2]:
-                        labels[idx] = nums[3]
-                    elif labels[idx] == nums[3]:
-                        labels[idx] = nums[2]
+                for label_flip in label_flipping_indices:
+                    for idx in range(len(labels)):
+                        if labels[idx] == label_flip[0]:
+                            labels[idx] = label_flip[1]
+                        elif labels[idx] == label_flip[1]:
+                            labels[idx] = label_flip[0]
 
 
             # 1. Forward pass
