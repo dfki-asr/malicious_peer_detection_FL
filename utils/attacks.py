@@ -13,7 +13,7 @@ def sign_flipping_attack(weights, attack_value=-1):
 def additive_noise_attack(weights, device, attack_value=0.2, seed=42):
     perturbed_weights = copy.deepcopy(weights)
     for k in perturbed_weights.keys():
-        noise = torch.from_numpy(np.random.default_rng(seed=seed).normal( scale=0.3, size=perturbed_weights[k].shape )).to(device)
+        noise = torch.from_numpy(np.random.default_rng(seed=seed).normal(loc=0, scale=20, size=perturbed_weights[k].shape )).to(device)
         perturbed_weights[k] = perturbed_weights[k] + attack_value * noise
     print(perturbed_weights)
     return perturbed_weights
