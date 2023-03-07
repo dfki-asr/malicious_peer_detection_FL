@@ -25,7 +25,7 @@ import torch.nn.functional as F
 from torchvision.utils import save_image
 from torch.utils.tensorboard import SummaryWriter
 
-from utils.models import CVAE
+from utils.models import CVAE, CVAE_regression
 from utils.datasets import load_data
 
 
@@ -46,7 +46,9 @@ class MaliciousUpdateDetection(fl.server.strategy.FedAvg):
         eval_fn,
         writer,
         on_fit_config_fn,
-        server_lr):
+        server_lr,
+        server_momentum,
+        model_inst):
 
         super().__init__(min_fit_clients=min_fit_clients, 
                         min_available_clients=min_available_clients, 
@@ -55,6 +57,8 @@ class MaliciousUpdateDetection(fl.server.strategy.FedAvg):
                         on_fit_config_fn=on_fit_config_fn)
         self.writer = writer
         self.server_lr = server_lr
+        self.server_momentum = server_momentum
+        self.model_inst = model_inst
         self.global_parameters = []
         self.bytes_recv_init_counter = psutil.net_io_counters().bytes_recv
         self.bytes_sent_init_counter = psutil.net_io_counters().bytes_sent
@@ -64,6 +68,10 @@ class MaliciousUpdateDetection(fl.server.strategy.FedAvg):
         self, server_round, parameters, client_manager
     ):
         """Configure the next round of training."""
+
+        if server_round == 1:
+            self.global_parameters = parameters_to_ndarrays(parameters)
+
         clients_conf = super().configure_fit(server_round, parameters, client_manager)
 
         self.writer.add_scalar("Training/total_num_clients", len(clients_conf), server_round)
@@ -81,8 +89,8 @@ class MaliciousUpdateDetection(fl.server.strategy.FedAvg):
         if not results:
             return None, {}
         # Do not aggregate if there are failures and failures are not accepted
-        if not self.accept_failures and failures:
-            return None, {}
+        # if not self.accept_failures and failures:
+        #     return None, {}
 
         # Convert results
         weights_results = [
@@ -92,22 +100,50 @@ class MaliciousUpdateDetection(fl.server.strategy.FedAvg):
 
         # Retreiving CVAEs from each client
         n_decoders = len(weights_results)
-        cvaes = [CVAE(dim_x=(28, 28, 1), dim_y=10, dim_z=20).to(DEVICE) for i in range(n_decoders)]
+        if self.model_inst == CVAE:
+            cvaes = [CVAE(dim_x=(28, 28, 1), dim_y=10, dim_z=20).to(DEVICE) for i in range(n_decoders)]
+        elif self.model_inst == CVAE_regression:
+            cvaes = [CVAE_regression(dim_x=(28, 28, 1), dim_y=10, dim_z=20, input_size=784, num_classes=10).to(DEVICE) for i in range(n_decoders)]
+
         for i in range(n_decoders):
             cvaes[i].set_weights(weights_results[i][0])
 
         # Evaluating performance of local classifiers on synthetic data, and discarding malicious updates
-        if server_round > 1:
-            benign_indices = self.eval_local_updates(cvaes, server_round)
-            weights_results = [weights_results[i] for i in benign_indices]
+        benign_indices = self.eval_local_updates(cvaes, server_round)
+        weights_results = [weights_results[i] for i in benign_indices]
 
-        # parameters_aggregated = ndarrays_to_parameters(self.aggregate(weights_results))
+        # Computing momentum vector
+        if self.server_momentum > 0:
+            pseudo_gradient: NDArrays = [
+                x - y
+                for x, y in zip(
+                    self.global_parameters, self.aggregate(weights_results)
+                )
+            ]
+            
+            if server_round > 1:
+                self.momentum_vector = [
+                    self.server_momentum * x + y
+                    for x, y in zip(self.momentum_vector, pseudo_gradient)
+                ]
+            else:
+                self.momentum_vector = pseudo_gradient
 
-        if server_round == 1:
-            self.global_parameters = self.aggregate(weights_results)
+            # Updating global model
+            self.global_parameters = [
+                x - self.server_lr * y
+                for x, y in zip(
+                    self.global_parameters, self.momentum_vector
+                )
+            ]
+
         else:
-            self.global_parameters = [global_layer * (1 - self.server_lr) + local_layer * self.server_lr \
-                 for global_layer, local_layer in zip(self.global_parameters, self.aggregate(weights_results))]
+            # Updating global model
+            if server_round == 1:
+                self.global_parameters = self.aggregate(weights_results)
+            else:
+                self.global_parameters = [global_layer * (1 - self.server_lr) + local_layer * self.server_lr \
+                    for global_layer, local_layer in zip(self.global_parameters, self.aggregate(weights_results))]
 
         # Aggregate custom metrics if aggregation fn was provided
         metrics_aggregated = {}
@@ -174,13 +210,17 @@ class MaliciousUpdateDetection(fl.server.strategy.FedAvg):
                 with torch.inference_mode():
                     sample = cvae.decoder((sample, c)).to(DEVICE)
                     sample = sample.reshape([1, 1, 28, 28])
-                    save_image(sample, f'{log_img_dir}/decoder-{decoder_index}-label-{label}.png')
+                    sample = sample.view(-1, 784)
 
                 # testing each classifier with the generated data
                 for classifier_index, model in enumerate(cvaes):
                     model.eval()
                     with torch.inference_mode():
-                        c_out = model.classifier(sample)
+                        if self.model_inst == CVAE:
+                            c_out = model.classifier(sample)
+                        elif self.model_inst == CVAE_regression:
+                            c_out = model.linear(sample)
+
                     c_out = torch.argmax(c_out).item()
                     if c_out == label:
                         classifier_accs[classifier_index][decoder_index] += 1
@@ -192,18 +232,16 @@ class MaliciousUpdateDetection(fl.server.strategy.FedAvg):
                 print(f"Classifier {classifier_index} accuracy : {classifier_accs[classifier_index][decoder_index]/n_synthetic_data}")
 
         delete_list = []
+        dynamic_threshold = np.mean(classifier_accs)/n_synthetic_data
+        print(f'Setting Dynamic Threshold to {dynamic_threshold}')
+
         for classifier_index in range(n_cvaes):
             avg_acc = np.mean(classifier_accs[classifier_index])/n_synthetic_data
-            dynamic_threshold = np.mean(classifier_accs)/n_synthetic_data
-            
-            print(f'Setting Dynamic Threshold to {dynamic_threshold}')
-
-            print(f'Classifier {n_cvaes}, average accuracy : {avg_acc}')
-
-            
+            print(f'Classifier {classifier_index}, average accuracy : {avg_acc}')
             if avg_acc < dynamic_threshold:
                 delete_list.append(classifier_index)
                 self.writer.add_scalar("Training/threshold", dynamic_threshold, server_round)
+        
         if(len(delete_list)>0):
             print(f"Discarding classifiers {delete_list}, benign indices size {len(benign_indices)}")
             benign_indices = np.delete(benign_indices, delete_list)
