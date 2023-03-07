@@ -10,8 +10,8 @@ import copy
 import os
 import time
 from utils.datasets import load_data
-from utils.models import CVAE, Classifier, LogisticRegression
-from utils.function import test, test_standard_classifier, test_regression
+from utils.models import CVAE, CVAE_regression, Classifier, LogisticRegression
+from utils.function import test, test_standard_classifier, test_regression, test_cvae_regression
 
 from strategies.MaliciousUpdateDetectionStrategy import MaliciousUpdateDetection
 from strategies.TensorboardStrategy import TensorboardStrategy
@@ -42,6 +42,9 @@ def get_eval_fn(model):
 		if args.model == "cvae":
 			loss, c_loss, accuracy = test(model, testloader, device=DEVICE)
 			return loss, {"accuracy": accuracy, "c_loss": c_loss}
+		elif args.model == "cvae_regression":
+			loss, c_loss, accuracy = test_cvae_regression(model, testloader, device=DEVICE)
+			return loss, {"accuracy": accuracy, "c_loss": c_loss}
 		elif args.model == 'classifier':
 			loss, accuracy = test_standard_classifier(model, testloader, device=DEVICE)
 			return loss, {"accuracy": accuracy}
@@ -58,7 +61,8 @@ def fig_config(server_round: int):
 	config = {
 		"batch_size": 64,
 		"current_round": server_round,
-		"local_epochs": 1,
+		"local_epochs": args.local_epochs,
+		"log_img": False,
 	}
 	return config
 
@@ -93,6 +97,12 @@ if __name__ == "__main__":
 	parser.add_argument(
 		"--server_lr", type=float, required=False, default=1, help="Server learning rate: [0, 1]"
 	)
+	parser.add_argument(
+		"--server_momentum", type=float, required=False, default=0, help="Server momentum: [0, 1]"
+	)
+	parser.add_argument(
+		"--local_epochs", type=int, required=False, default=1, help="Local epochs"
+	)
 
 	args = parser.parse_args()
 	print(f"Running {args.strategy} for {args.attack} attack. Total number of rounds: {args.num_rounds}")
@@ -100,34 +110,53 @@ if __name__ == "__main__":
 	# Global Model
 	if args.model == 'cvae':
 		model = CVAE(dim_x=(28, 28, 1), dim_y=10, dim_z=20).to(DEVICE)
+	elif args.model == 'cvae_regression':
+		model = CVAE_regression(dim_x=(28, 28, 1), dim_y=10, dim_z=20, input_size=784, num_classes=10).to(DEVICE)
 	elif args.model == 'classifier':
 		model = Classifier(dim_y=10).to(DEVICE)
 	elif args.model == 'regression':
 		model = LogisticRegression(input_size=784, num_classes=10).to(DEVICE)
 
 	# SummaryWriter
-	writer = SummaryWriter(log_dir=f"./fl_logs/", filename_suffix=f'{args.attack}-{args.strategy}')
+	writer = SummaryWriter(log_dir=f"./fl_logs/{args.attack}-{args.strategy}", filename_suffix=f'{args.attack}-{args.strategy}')
 
 	writer.add_scalar("hp/batch_size", batch_size)
 	writer.add_scalar("hp/num_rounds", args.num_rounds)
 	writer.add_scalar("hp/min_fit_clients", args.min_fit_clients)
 	writer.add_scalar("hp/fraction_fit", args.fraction_fit)
 	writer.add_scalar("hp/server_lr", args.server_lr)
+	writer.add_scalar("hp/server_momentum", args.server_momentum)
+	writer.add_scalar("hp/local_epochs", args.local_epochs)
 	writer.add_text("hp/strategy", args.strategy)
 	writer.add_text("hp/attack", args.attack)
 
 
 	# Optimization strategy
 	if args.strategy == "detection_strategy":
-		strategy = MaliciousUpdateDetection(
-			min_fit_clients=args.min_fit_clients,
-			min_available_clients=args.min_available_clients,
-			fraction_fit=args.fraction_fit,
-			eval_fn=get_eval_fn(model),
-			writer=writer,
-			on_fit_config_fn=fig_config,
-			server_lr=args.server_lr,
-		)
+		if args.model == "cvae":
+			strategy = MaliciousUpdateDetection(
+				min_fit_clients=args.min_fit_clients,
+				min_available_clients=args.min_available_clients,
+				fraction_fit=args.fraction_fit,
+				eval_fn=get_eval_fn(model),
+				writer=writer,
+				on_fit_config_fn=fig_config,
+				server_lr=args.server_lr,
+				server_momentum=args.server_momentum,
+				model_inst=CVAE
+			)
+		elif args.model == "cvae_regression":
+			strategy = MaliciousUpdateDetection(
+				min_fit_clients=args.min_fit_clients,
+				min_available_clients=args.min_available_clients,
+				fraction_fit=args.fraction_fit,
+				eval_fn=get_eval_fn(model),
+				writer=writer,
+				on_fit_config_fn=fig_config,
+				server_lr=args.server_lr,
+				server_momentum=args.server_momentum,
+				model_inst=CVAE_regression
+			)
 	elif args.strategy == "fedavg":
 		strategy = TensorboardStrategy(
 			min_fit_clients=args.min_fit_clients,

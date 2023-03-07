@@ -6,10 +6,10 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 
 from utils.datasets import load_partition
-from utils.models import CVAE, Classifier, LogisticRegression
+from utils.models import CVAE, CVAE_regression, Classifier, LogisticRegression
 from utils.partition_data import Partition
 from utils.attacks import sign_flipping_attack, additive_noise_attack, same_value_attack
-from utils.function import train, train_standard_classifier, train_regression, test, test_standard_classifier, test_regression
+from utils.function import train, train_standard_classifier, train_regression, train_cvae_regression, test, test_standard_classifier, test_regression, test_cvae_regression
 import logging
 import flwr as fl
 
@@ -36,6 +36,10 @@ class FlowerClient(fl.client.NumPyClient):
             params_dict = zip(self.model.classifier.state_dict().keys(), parameters)
             state_dict = OrderedDict({k: torch.Tensor(v) for k, v in params_dict})
             self.model.classifier.load_state_dict(state_dict, strict=True)
+        elif args.model == 'cvae_regression':
+            params_dict = zip(self.model.linear.state_dict().keys(), parameters)
+            state_dict = OrderedDict({k: torch.Tensor(v) for k, v in params_dict})
+            self.model.linear.load_state_dict(state_dict, strict=True)
         else:
             params_dict = zip(self.model.state_dict().keys(), parameters)
             state_dict = OrderedDict({k: torch.Tensor(v) for k, v in params_dict})
@@ -46,6 +50,8 @@ class FlowerClient(fl.client.NumPyClient):
             self.set_parameters(parameters)
             if args.model == 'cvae':
                 train(self.model, self.trainloader, config=config, device=DEVICE, args=args)
+            if args.model == 'cvae_regression':
+                train_cvae_regression(self.model, self.trainloader, config=config, device=DEVICE, args=args)
             elif args.model == 'classifier':
                 train_standard_classifier(self.model, self.trainloader, config=config, device=DEVICE, args=args)
             elif args.model == 'regression':
@@ -55,6 +61,8 @@ class FlowerClient(fl.client.NumPyClient):
             self.set_parameters(parameters)
             if args.model == 'cvae':
                 train(self.model, self.trainloader, config=config, label_flipping=True, device=DEVICE, args=args)
+            if args.model == 'cvae_regression':
+                train_cvae_regression(self.model, self.trainloader, config=config, label_flipping=True,device=DEVICE, args=args)
             elif args.model == 'classifier':
                 train_standard_classifier(self.model, self.trainloader, config=config, label_flipping=True, device=DEVICE, args=args)
             elif args.model == 'regression':
@@ -65,6 +73,9 @@ class FlowerClient(fl.client.NumPyClient):
             if args.model == 'cvae':
                 train(self.model, self.trainloader, config=config, device=DEVICE, args=args)
                 self.model.classifier.load_state_dict(sign_flipping_attack(self.model.classifier.state_dict()))
+            if args.model == 'cvae_regression':
+                train_cvae_regression(self.model, self.trainloader, config=config, device=DEVICE, args=args)
+                self.model.linear.load_state_dict(sign_flipping_attack(self.model.linear.state_dict()))
             elif args.model == 'classifier':
                 train_standard_classifier(self.model, self.trainloader, config=config, device=DEVICE, args=args)
                 self.model.classifier.load_state_dict(sign_flipping_attack(self.model.classifier.state_dict()))
@@ -77,6 +88,9 @@ class FlowerClient(fl.client.NumPyClient):
             if args.model == 'cvae':
                 train(self.model, self.trainloader, config=config, device=DEVICE, args=args)
                 self.model.classifier.load_state_dict(additive_noise_attack(self.model.classifier.state_dict(), device=DEVICE))
+            if args.model == 'cvae_regression':
+                train_cvae_regression(self.model, self.trainloader, config=config, device=DEVICE, args=args)
+                self.model.linear.load_state_dict(additive_noise_attack(self.model.linear.state_dict(), device=DEVICE))
             elif args.model == 'classifier':
                 train_standard_classifier(self.model, self.trainloader, config=config, device=DEVICE, args=args)
                 self.model.classifier.load_state_dict(additive_noise_attack(self.model.classifier.state_dict(), device=DEVICE))
@@ -89,6 +103,10 @@ class FlowerClient(fl.client.NumPyClient):
                 params_dict = zip(self.model.classifier.state_dict().keys(), parameters)
                 state_dict = OrderedDict({k: torch.Tensor(v) for k, v in params_dict})
                 self.model.classifier.load_state_dict(same_value_attack(state_dict))
+            elif args.model == 'cvae_regression':
+                params_dict = zip(self.model.linear.state_dict().keys(), parameters)
+                state_dict = OrderedDict({k: torch.Tensor(v) for k, v in params_dict})
+                self.model.linear.load_state_dict(same_value_attack(state_dict))
             else:
                 params_dict = zip(self.model.state_dict().keys(), parameters)
                 state_dict = OrderedDict({k: torch.Tensor(v) for k, v in params_dict})
@@ -101,6 +119,8 @@ class FlowerClient(fl.client.NumPyClient):
 
         if args.model == "cvae":
             loss, c_loss, accuracy = test(self.model, self.valloader, device=DEVICE)
+        if args.model == "cvae_regression":
+            loss, c_loss, accuracy = test_cvae_regression(self.model, self.valloader, device=DEVICE)
         elif args.model == 'classifier':
             loss, accuracy = test_standard_classifier(self.model, self.valloader, device=DEVICE)
         elif args.model == 'regression':
@@ -131,6 +151,8 @@ if __name__ == "__main__":
 
     if args.model == 'cvae':
         model = CVAE(dim_x=(28, 28, 1), dim_y=10, dim_z=20).to(DEVICE)
+    elif args.model == 'cvae_regression':
+        model = CVAE_regression(dim_x=(28, 28, 1), dim_y=10, dim_z=20, input_size=784, num_classes=10).to(DEVICE)
     elif args.model == 'classifier':
         model = Classifier(dim_y=10).to(DEVICE)
     elif args.model == 'regression':

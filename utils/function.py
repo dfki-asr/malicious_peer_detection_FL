@@ -23,19 +23,9 @@ label_flipping_indices = [[7,5]]
 
 def train(model, train_dataloader, config, label_flipping=False, device=DEVICE, args=None):
     """Train the network on the training set."""
-    log_img_dir = 'fl_logs/img/client_generation'
     
     if label_flipping:
-    ####### Picking 4 random classes to swap between ################
-        # random.seed(args.seed)
-        # nums = random.sample(range(0,9), 4)
-
-        print(f'Çlasses swapped: ')
-        logging.info(f'Çlasses swapped: ')
-        for label_flip in label_flipping_indices:
-            print(f'{label_flip[0]} and {label_flip[1]}')
-            logging.info(f'{label_flip[0]} and {label_flip[1]}')
-
+        log_label_flipping(label_flipping_indices)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     model.train()
@@ -47,13 +37,7 @@ def train(model, train_dataloader, config, label_flipping=False, device=DEVICE, 
             labels = labels.to(device)
             
             if label_flipping:
-            ####### Actual Swapping Of Labels #####
-                for label_flip in label_flipping_indices:
-                    for idx in range(len(labels)):
-                        if labels[idx] == label_flip[0]:
-                            labels[idx] = label_flip[1]
-                        elif labels[idx] == label_flip[1]:
-                            labels[idx] = label_flip[0]
+                labels = label_flipping(labels, label_flipping_indices)
 
             # 1. Forward pass
             mu, logvar, recon_batch, c_out = model((images, labels))
@@ -94,40 +78,15 @@ def train(model, train_dataloader, config, label_flipping=False, device=DEVICE, 
         logging.info('====> Epoch: {} Average loss: {:.4f}\tClassifier Accuracy: {:.4f}'.format(
             epoch, train_loss / len(train_dataloader.dataset), classif_accuracy/len(train_dataloader)))
 
-
-    # Image generation
-    model.eval()
-    for i in range(2):
-        sample = torch.randn(1, 20).to(DEVICE)
-        c = np.zeros(shape=(sample.shape[0],))
-        label = i+1
-        c[:] = label
-        c = torch.FloatTensor(c)
-        c = c.to(torch.int64)
-        c = c.to(DEVICE)
-        c = F.one_hot(c, cond_shape)
-        model.eval()
-        with torch.inference_mode():
-            sample = model.decoder((sample, c)).to(DEVICE)
-            sample = sample.reshape([1, 1, 28, 28])
-            saving_path = f'{log_img_dir}/round-{config["current_round"]}'
-            os.makedirs(saving_path, exist_ok=True)
-            save_image(sample, f'{saving_path}/client-{args.num}-label-{label}.png')
+    if config["log_img"]:
+        generate_and_save_images(model)
 
 
 def train_standard_classifier(model, train_dataloader, config, label_flipping=False, device=DEVICE, args=None):
     """Train the network on the training set."""
     
     if label_flipping:
-    ####### Picking 4 random classes to swap between ################
-        # random.seed(args.seed)
-        # nums = random.sample(range(0,9), 4)
-
-        print(f'Çlasses swapped: ')
-        logging.info(f'Çlasses swapped: ')
-        for label_flip in label_flipping_indices:
-            print(f'{label_flip[0]} and {label_flip[1]}')
-            logging.info(f'{label_flip[0]} and {label_flip[1]}')
+        log_label_flipping(label_flipping_indices)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     model.train()
@@ -139,14 +98,7 @@ def train_standard_classifier(model, train_dataloader, config, label_flipping=Fa
             labels = labels.to(device)
             
             if label_flipping:
-            ####### Actual Swapping Of Labels #####
-                for label_flip in label_flipping_indices:
-                    for idx in range(len(labels)):
-                        if labels[idx] == label_flip[0]:
-                            labels[idx] = label_flip[1]
-                        elif labels[idx] == label_flip[1]:
-                            labels[idx] = label_flip[0]
-
+                labels = label_flipping(labels, label_flipping_indices)
 
             # 1. Forward pass
             c_out = model((images, labels))
@@ -191,17 +143,9 @@ def train_regression(model, train_dataloader, config, label_flipping=False, devi
     """Train the network on the training set."""
     
     if label_flipping:
-    ####### Picking 4 random classes to swap between ################
-        # random.seed(args.seed)
-        # nums = random.sample(range(0,9), 4)
+        log_label_flipping(label_flipping_indices)
 
-        print(f'Çlasses swapped: ')
-        logging.info(f'Çlasses swapped: ')
-        for label_flip in label_flipping_indices:
-            print(f'{label_flip[0]} and {label_flip[1]}')
-            logging.info(f'{label_flip[0]} and {label_flip[1]}')
-
-    optimizer = torch.optim.SGD(model.parameters(), lr=1e-3)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     loss_func = nn.CrossEntropyLoss()
 
     model.train()
@@ -213,14 +157,7 @@ def train_regression(model, train_dataloader, config, label_flipping=False, devi
             labels = labels.to(device)
             
             if label_flipping:
-            ####### Actual Swapping Of Labels #####
-                for label_flip in label_flipping_indices:
-                    for idx in range(len(labels)):
-                        if labels[idx] == label_flip[0]:
-                            labels[idx] = label_flip[1]
-                        elif labels[idx] == label_flip[1]:
-                            labels[idx] = label_flip[0]
-
+                labels = label_flipping(labels, label_flipping_indices)
 
             # 1. Forward pass
             log_probs = model((images, labels))
@@ -257,6 +194,69 @@ def train_regression(model, train_dataloader, config, label_flipping=False, devi
             
         logging.info('====> Epoch: {} Average loss: {:.4f}\tClassifier Accuracy: {:.4f}'.format(
             epoch, train_loss / len(train_dataloader.dataset), classif_accuracy/len(train_dataloader)))
+
+
+def train_cvae_regression(model, train_dataloader, config, label_flipping=False, device=DEVICE, args=None):
+    """Train the network on the training set."""
+    
+    if label_flipping:
+        log_label_flipping(label_flipping_indices)
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+    loss_func = nn.CrossEntropyLoss
+
+    model.train()
+    for epoch in range(config["local_epochs"]):
+        train_loss = 0
+        classif_accuracy = 0
+        for batch, (images, labels) in enumerate(train_dataloader):
+            images = images.to(device) #[64, 1, 28, 28]
+            labels = labels.to(device)
+            
+            if label_flipping:
+                labels = label_flipping(labels, label_flipping_indices)
+
+            # 1. Forward pass
+            mu, logvar, recon_batch, c_out = model((images, labels))
+            flat_data = images.view(-1, flat_shape[0]).to(device)                            
+            y_onehot = F.one_hot(labels, cond_shape).to(device)
+            inp = torch.cat((flat_data, y_onehot), 1)
+
+            # 2. Calculate loss
+            loss, C_loss, BCE, KLD = loss_fn(recon_batch, flat_data, mu, logvar, c_out, y_onehot, loss=loss_func)
+            train_loss += loss.item()
+            classif_accuracy += accuracy_fn(labels, torch.argmax(c_out, dim=1))
+
+            # 3. Zero grad
+            optimizer.zero_grad()
+
+            # 4. Backprop
+            loss.backward()
+
+            # 5. Step
+            optimizer.step()
+
+            if batch % 10 == 0:
+                print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}\tBCE:{:.4f}\tKLD:{:.4f}\tC_loss:{:.4f}'.format(
+                    epoch,
+                    batch * len(images),
+                    len(train_dataloader.dataset),
+                    100. * batch / len(train_dataloader),
+                    loss.item() / len(images), BCE.item() / len(images), KLD.item() / len(images), C_loss.item() / len(images)))
+                logging.info('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}\tBCE:{:.4f}\tKLD:{:.4f}\tC_loss:{:.4f}'.format(
+                    epoch,
+                    batch * len(images),
+                    len(train_dataloader.dataset),
+                    100. * batch / len(train_dataloader),
+                    loss.item() / len(images), BCE.item() / len(images), KLD.item() / len(images), C_loss.item() / len(images)))
+        print('====> Epoch: {} Average loss: {:.4f}\tClassifier Accuracy: {:.4f}'.format(
+            epoch, train_loss / len(train_dataloader.dataset), classif_accuracy/len(train_dataloader)))
+            
+        logging.info('====> Epoch: {} Average loss: {:.4f}\tClassifier Accuracy: {:.4f}'.format(
+            epoch, train_loss / len(train_dataloader.dataset), classif_accuracy/len(train_dataloader)))
+
+    if config["log_img"]:
+        generate_and_save_images(model)
 
 
 def test(model, test_dataloader, device=DEVICE):
@@ -339,9 +339,39 @@ def test_regression(model, test_dataloader, device=DEVICE):
     return test_loss, classif_accuracy/len(test_dataloader)
 
 
-def loss_fn(recon, x, mu, logvar, c_out, y_onehot, device=DEVICE):
+def test_cvae_regression(model, test_dataloader, device=DEVICE):
+    #Sets the module in evaluation mode
+    model.eval()
+    test_loss = 0
+    c_test_loss = 0
+    classif_accuracy = 0
+    with torch.inference_mode():
+        for i, (X, y) in enumerate(test_dataloader):
+            X = X.to(device)
+            y = y.to(device)
+            # 1. Forward pass
+            mu, logvar, recon_batch, c_out = model((X, y))
+
+            flat_data = X.view(-1, flat_shape[0]).to(device)
+            y_onehot = F.one_hot(y, cond_shape).to(device)
+            inp = torch.cat((flat_data, y_onehot), 1)
+
+            # 2. Loss
+            tot_loss, C_loss, BCE, KLD = loss_fn(recon_batch, flat_data, mu, logvar, c_out, y_onehot, loss=nn.CrossEntropyLoss)
+            test_loss += tot_loss.item()
+            c_test_loss += C_loss.item()
+            classif_accuracy += accuracy_fn(y, torch.argmax(c_out, dim=1))
+
+
+    test_loss /= len(test_dataloader.dataset)
+    c_test_loss /= len(test_dataloader.dataset)
+    print('====> Test set loss: {:.4f}'.format(test_loss))
+    return test_loss, c_test_loss, classif_accuracy/len(test_dataloader)
+
+
+def loss_fn(recon, x, mu, logvar, c_out, y_onehot, loss=torch.nn.BCELoss, device=DEVICE):
     y_onehot1 = y_onehot.type(torch.FloatTensor).to(device)
-    classif_loss = torch.nn.BCELoss()(c_out, y_onehot1)
+    classif_loss = loss()(c_out, y_onehot1)
     BCE = F.binary_cross_entropy(recon, x, reduction='sum')
     KLD = -0.5*torch.sum(1+logvar-mu.pow(2)-logvar.exp())
     return classif_loss+BCE+KLD, classif_loss, BCE, KLD
@@ -369,71 +399,26 @@ def accuracy_fn(y_true, y_pred):
     return acc
 
 
-def train_label_flipping(model, train_dataloader, config, device=DEVICE, args=None):
-    """Train the network on the training set with permuted labels"""
+def log_label_flipping(indices):
+    print(f'Çlasses swapped: ')
+    logging.info(f'Çlasses swapped: ')
+    for label_flip in label_flipping_indices:
+        print(f'{label_flip[0]} and {label_flip[1]}')
+        logging.info(f'{label_flip[0]} and {label_flip[1]}')
+
+
+def label_flipping(label, indices):
+    for label_flip in indices:
+        for idx in range(len(labels)):
+            if labels[idx] == label_flip[0]:
+                labels[idx] = label_flip[1]
+            elif labels[idx] == label_flip[1]:
+                labels[idx] = label_flip[0]
+    return labels
+
+
+def generate_and_save_images(model):
     log_img_dir = 'fl_logs/img/client_generation'
-
-    ####### Picking 4 random classes to swap between ################
-    random.seed(args.seed)
-    nums = random.sample(range(0,9), 4)
-    print(f'Çlasses swapped: {nums[0]} and {nums[1]}, {nums[2]} and {nums[3]}')
-    logging.info(f'Çlasses swapped: {nums[0]} and {nums[1]}, {nums[2]} and {nums[3]}')
-
-    ########
-
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-    model.train()
-    for epoch in range(config["local_epochs"]):
-        train_loss = 0
-        classif_accuracy = 0
-        for batch, (images, labels) in enumerate(train_dataloader):
-            images = images.to(device) #[64, 1, 28, 28]
-            # labels = labels.apply_(label_permutations.get).to(device)
-            labels = labels.to(device)
-            
-            ####### Actual Swapping Of Labels #####
-            for idx in range(len(labels)):
-                if labels[idx] == nums[0]:
-                    labels[idx] = nums[1]
-                elif labels[idx] == nums[1]:
-                    labels[idx] = nums[0]
-                elif labels[idx] == nums[2]:
-                    labels[idx] = nums[3]
-                elif labels[idx] == nums[3]:
-                    labels[idx] = nums[2]
-
-            #########
-
-            # 1. Forward pass
-            mu, logvar, recon_batch, c_out = model((images, labels))
-            flat_data = images.view(-1, flat_shape[0]).to(device)                            
-            y_onehot = F.one_hot(labels, cond_shape).to(device)
-            inp = torch.cat((flat_data, y_onehot), 1)
-
-            # 2. Calculate loss
-            loss, C_loss, BCE, KLD = loss_fn(recon_batch, flat_data, mu, logvar, c_out, y_onehot)
-            train_loss += loss.item()
-            classif_accuracy += accuracy_fn(labels, torch.argmax(c_out, dim=1))
-
-            # 3. Zero grad
-            optimizer.zero_grad()
-
-            # 4. Backprop
-            loss.backward()
-
-            # 5. Step
-            optimizer.step()
-
-            if batch % 10 == 0:
-                print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}\tBCE:{:.4f}\tKLD:{:.4f}\tC_loss:{:.4f}'.format(
-                    epoch,
-                    batch * len(images),
-                    len(train_dataloader.dataset),
-                    100. * batch / len(train_dataloader),
-                    loss.item() / len(images), BCE.item() / len(images), KLD.item() / len(images), C_loss.item() / len(images)))
-        print('====> Epoch: {} Average loss: {:.4f}\tClassifier Accuracy: {:.4f}'.format(
-            epoch, train_loss / len(train_dataloader.dataset), classif_accuracy/len(train_dataloader)))
-
 
     # Image generation
     model.eval()

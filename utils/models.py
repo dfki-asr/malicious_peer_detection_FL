@@ -276,3 +276,33 @@ class LogisticRegression(nn.Module):
             {k: torch.tensor(v) for k, v in zip(self.state_dict().keys(), weights)}
         )
         self.load_state_dict(state_dict, strict=True)
+
+
+class CVAE_regression(nn.Module):
+    def __init__(self, dim_x, dim_y, dim_z, input_size, num_classes):
+        super(CVAE_regression, self).__init__()
+        self.linear = nn.Linear(input_size, num_classes)
+
+        #Encoder 
+        self.encoder = Encoder(dim_x=dim_x, dim_y=dim_y, dim_z=dim_z)
+
+        #Decoder
+        self.decoder = Decoder(dim_y=dim_y, dim_z=dim_z)
+
+    def forward(self, inputs, device=DEVICE):
+        x, y = inputs      
+        x = x.to(device)
+        y = F.one_hot(y, 10).to(device)
+        c_out = self.linear(x.view(-1, 28*28))
+        print_debug(f"Inputs shape: {x.shape} and labels: {y.shape}")
+        mu, logvar, z = self.encoder((x,y))
+        out = self.decoder((z, y))
+        print_debug(f"decoder output shape is: {out.shape}")
+        return mu, logvar, out, c_out
+
+    def set_weights(self, weights):
+        """Set model weights from a list of NumPy ndarrays."""
+        state_dict = OrderedDict(
+            {k: torch.tensor(v) for k, v in zip(self.state_dict().keys(), weights)}
+        )
+        self.load_state_dict(state_dict, strict=True)
