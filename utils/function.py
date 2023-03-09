@@ -37,7 +37,7 @@ def train(model, train_dataloader, config, label_flipping=False, device=DEVICE, 
             labels = labels.to(device)
             
             if label_flipping:
-                labels = label_flipping(labels, label_flipping_indices)
+                labels = label_flip(labels, label_flipping_indices)
 
             # 1. Forward pass
             mu, logvar, recon_batch, c_out = model((images, labels))
@@ -98,7 +98,7 @@ def train_standard_classifier(model, train_dataloader, config, label_flipping=Fa
             labels = labels.to(device)
             
             if label_flipping:
-                labels = label_flipping(labels, label_flipping_indices)
+                labels = label_flip(labels, label_flipping_indices)
 
             # 1. Forward pass
             c_out = model((images, labels))
@@ -157,7 +157,7 @@ def train_regression(model, train_dataloader, config, label_flipping=False, devi
             labels = labels.to(device)
             
             if label_flipping:
-                labels = label_flipping(labels, label_flipping_indices)
+                labels = label_flip(labels, label_flipping_indices)
 
             # 1. Forward pass
             log_probs = model((images, labels))
@@ -214,7 +214,7 @@ def train_cvae_regression(model, train_dataloader, config, label_flipping=False,
             labels = labels.to(device)
             
             if label_flipping:
-                labels = label_flipping(labels, label_flipping_indices)
+                labels = label_flip(labels, label_flipping_indices)
 
             # 1. Forward pass
             mu, logvar, recon_batch, c_out = model((images, labels))
@@ -407,7 +407,7 @@ def log_label_flipping(indices):
         logging.info(f'{label_flip[0]} and {label_flip[1]}')
 
 
-def label_flipping(label, indices):
+def label_flip(labels, indices):
     for label_flip in indices:
         for idx in range(len(labels)):
             if labels[idx] == label_flip[0]:
