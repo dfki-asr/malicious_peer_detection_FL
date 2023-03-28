@@ -10,6 +10,10 @@ import os
 
 # Hard coding the value for testing purpose
 flat_shape = [784]
+cond_shape=10
+intermediate_dim=400
+z_dim=20
+
 PRINT_REQ = False
 
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -133,7 +137,7 @@ class Decoder(nn.Module):
 
 
 
-class CVAE(nn.Module):
+class CVAE_big(nn.Module):
     def __init__(self, dim_x, dim_y, dim_z):
         super().__init__()
         self.classifier = nn.Sequential(
@@ -164,9 +168,10 @@ class CVAE(nn.Module):
     def set_weights(self, weights):
         """Set model weights from a list of NumPy ndarrays."""
         state_dict = OrderedDict(
-            {k: torch.tensor(v) for k, v in zip(self.state_dict().keys(), weights)}
+            {k.removeprefix("classifier.").removeprefix("decoder."): torch.tensor(v) for k, v in zip(self.state_dict().keys(), weights)}
         )
-        self.load_state_dict(state_dict, strict=True)
+        self.classifier.load_state_dict(state_dict, strict=False)
+        self.decoder.load_state_dict(state_dict, strict=False)
 
    
 def print_debug(data):
@@ -176,22 +181,61 @@ def print_debug(data):
         pass
 
 
-class Classifier(nn.Module):
+class Classifier_small(nn.Module):
     def __init__(self, dim_y):
         super().__init__()
         self.classifier = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(in_features=flat_shape[0], out_features=128),
+            nn.Linear(in_features=flat_shape[0], out_features=800),
             nn.ReLU(),
-            nn.Linear(in_features=128, out_features=dim_y),
+            nn.Linear(in_features=800, out_features=dim_y),
             nn.Softmax(dim=-1)
         )
 
     def forward(self, inputs, device=DEVICE):
-        x, y = inputs      
-        x = x.to(device)
+        x = inputs.to(device)
         c_out = self.classifier(x)
         return c_out
+
+    def set_weights(self, weights):
+        """Set model weights from a list of NumPy ndarrays."""
+        state_dict = OrderedDict(
+            {k: torch.tensor(v) for k, v in zip(self.state_dict().keys(), weights)}
+        )
+        self.load_state_dict(state_dict, strict=True)
+
+
+class Classifier(nn.Module):
+    def __init__(self, dim_y):
+        """
+        McMahan et al., 2016; 1,663,370 parameters
+        """
+        super(Classifier, self).__init__()
+        self.activation = nn.ReLU(True)
+
+        self.conv1 = nn.Conv2d(in_channels=1, out_channels=32, kernel_size=(5, 5), padding=1, stride=1, bias=False)
+        self.conv2 = nn.Conv2d(in_channels=32, out_channels=32 * 2, kernel_size=(5, 5), padding=1, stride=1, bias=False)
+        
+        self.maxpool1 = nn.MaxPool2d(kernel_size=(2, 2), padding=1)
+        self.maxpool2 = nn.MaxPool2d(kernel_size=(2, 2), padding=1)
+        self.flatten = nn.Flatten()
+
+        self.fc1 = nn.Linear(in_features=(32 * 2) * (7 * 7), out_features=512, bias=False)
+        self.fc2 = nn.Linear(in_features=512, out_features=10, bias=False)
+        self.softmax = nn.Softmax(dim=-1)
+
+    def forward(self, inputs, device=DEVICE):
+        x = inputs.to(device)
+        x = self.activation(self.conv1(x))
+        x = self.maxpool1(x)
+
+        x = self.activation(self.conv2(x))
+        x = self.maxpool2(x)
+        x = self.flatten(x)
+
+        x = self.activation(self.fc1(x))
+        x = self.fc2(x)
+        return self.softmax(x)
 
     def set_weights(self, weights):
         """Set model weights from a list of NumPy ndarrays."""
@@ -303,6 +347,75 @@ class CVAE_regression(nn.Module):
     def set_weights(self, weights):
         """Set model weights from a list of NumPy ndarrays."""
         state_dict = OrderedDict(
-            {k: torch.tensor(v) for k, v in zip(self.state_dict().keys(), weights)}
+            {k.removeprefix("linear.").removeprefix("decoder."): torch.tensor(v) for k, v in zip(self.state_dict().keys(), weights)}
         )
-        self.load_state_dict(state_dict, strict=True)
+        self.linear.load_state_dict(state_dict, strict=False)
+        self.decoder.load_state_dict(state_dict, strict=False)
+
+
+class DenseDecoder(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.dec_in = nn.Linear(in_features=z_dim+cond_shape, out_features=intermediate_dim)
+        self.dec_out = nn.Linear(in_features=intermediate_dim, out_features=flat_shape[0]+cond_shape)
+
+    def forward(self, inp):
+        z, y = inp
+        t = torch.cat((z,y), dim=1)
+
+        dec_in_ret = F.relu(self.dec_in(t))
+        dec_out = torch.sigmoid(self.dec_out(dec_in_ret))
+        return dec_out
+
+
+class DenseEncoder(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.enc_in = nn.Linear(in_features=flat_shape[0]+cond_shape, out_features=intermediate_dim)
+        self.mu = nn.Linear(in_features=intermediate_dim, out_features=z_dim)
+        self.logvar = nn.Linear(in_features=intermediate_dim, out_features=z_dim)
+
+    def forward(self, inp):
+        x = inp[0].to(DEVICE)
+        y = inp[1].to(DEVICE)
+
+        flat_data = x.view(-1, flat_shape[0]).to(DEVICE)     
+        t = torch.cat((flat_data, y), 1)
+
+        enc_in_ret = F.relu(self.enc_in(t))
+        mu_out = F.relu(self.mu(enc_in_ret))
+        logvar_out = F.relu(self.logvar(enc_in_ret))
+        return mu_out, logvar_out
+
+    def reparametarize(self, mu, logvar):
+        sd = torch.exp(0.5*logvar)
+        eps = torch.randn_like(sd)
+        return mu + eps*sd
+
+
+class CVAE(nn.Module):
+    def __init__(self, dim_x, dim_y, dim_z):
+        super(CVAE, self).__init__()
+
+        self.classifier = Classifier(dim_y=dim_y)
+        self.decoder = DenseDecoder()
+        self.encoder = DenseEncoder()
+
+    def forward(self, inp, train_cvae=True, device=DEVICE):
+        x, y = inp
+        x = x.to(device)
+        c_out = self.classifier(x)
+        y = F.one_hot(y, 10).to(device) 
+        mu, logvar = self.encoder((x, y))
+        z = self.encoder.reparametarize(mu, logvar)
+        recon = self.decoder((z, y))
+        return mu, logvar, recon, c_out
+
+    def set_weights(self, weights):
+        """Set model weights from a list of NumPy ndarrays."""
+        state_dict = OrderedDict(
+            #{k.removeprefix("classifier.").removeprefix("decoder."): torch.tensor(v) for k, v in zip(self.state_dict().keys(), weights)}
+            {k.lstrip("classifier").lstrip("decoder").lstrip("."): torch.tensor(v) for k, v in zip(self.state_dict().keys(), weights)}
+        )
+        self.classifier.load_state_dict(state_dict, strict=False)
+        self.decoder.load_state_dict(state_dict, strict=False)

@@ -209,8 +209,9 @@ class MaliciousUpdateDetection(fl.server.strategy.FedAvg):
                 cvae.eval()
                 with torch.inference_mode():
                     sample = cvae.decoder((sample, c)).to(DEVICE)
+                    sample = sample[:, 0:sample.shape[1]-10]
                     sample = sample.reshape([1, 1, 28, 28])
-                    sample = sample.view(-1, 784)
+                    #sample = sample.view(-1, 784)
 
                 # testing each classifier with the generated data
                 for classifier_index, model in enumerate(cvaes):
@@ -240,7 +241,8 @@ class MaliciousUpdateDetection(fl.server.strategy.FedAvg):
             print(f'Classifier {classifier_index}, average accuracy : {avg_acc}')
             if avg_acc < dynamic_threshold:
                 delete_list.append(classifier_index)
-                self.writer.add_scalar("Training/threshold", dynamic_threshold, server_round)
+                
+        self.writer.add_scalar("Training/threshold", dynamic_threshold, server_round)
         
         if(len(delete_list)>0):
             print(f"Discarding classifiers {delete_list}, benign indices size {len(benign_indices)}")

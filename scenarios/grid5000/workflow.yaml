@@ -46,7 +46,8 @@
               --min_fit_clients {{ min_fit_clients }}
               --fraction_fit {{ fraction_fit }}
               --server_lr {{ server_lr }}
-              --server_momentum {{ server_momentum }}'
+              --server_momentum {{ server_momentum }}
+              --local_epochs {{ local_epochs }}'
       async: "{{ async }}"
       poll: 0
     - debug:
@@ -77,7 +78,7 @@
   finalize:
     - debug:
         msg: "Retreiving log files"
-    - shell: "sudo docker cp {{ container_name }}:/app/fl_logs/ /home/cprigent/runs/"
+    - shell: "sudo docker cp {{ container_name }}:/app/fl_logs/ /home/cprigent/runs/last/"
     - debug:
         msg: "Stop and remove container"
     - shell: "docker stop {{ container_name }}"

@@ -1,6 +1,7 @@
 from collections import OrderedDict
 from typing import List, Tuple
 import argparse
+import copy
 
 import torch
 from torch.utils.tensorboard import SummaryWriter
@@ -27,12 +28,18 @@ class FlowerClient(fl.client.NumPyClient):
         self.trainloader = trainloader
         self.valloader = valloader
         self.debug = 0
+        self.firstSample = True
 
     def get_parameters(self, config=None):
-        return [val.cpu().numpy() for _, val in self.model.state_dict().items()]
+        if args.model == 'cvae' or 'cvae_regression':
+            model_copy = copy.deepcopy(self.model)
+            model_copy.encoder = None
+            return [val.cpu().numpy() for _, val in model_copy.state_dict().items()]
+        else:
+            return [val.cpu().numpy() for _, val in self.model.state_dict().items()]
 
     def set_parameters(self, parameters):
-        if args.model == 'cvae' or args.model == 'classifier':
+        if args.model == 'cvae':
             params_dict = zip(self.model.classifier.state_dict().keys(), parameters)
             state_dict = OrderedDict({k: torch.Tensor(v) for k, v in params_dict})
             self.model.classifier.load_state_dict(state_dict, strict=True)
@@ -78,7 +85,7 @@ class FlowerClient(fl.client.NumPyClient):
                 self.model.linear.load_state_dict(sign_flipping_attack(self.model.linear.state_dict()))
             elif args.model == 'classifier':
                 train_standard_classifier(self.model, self.trainloader, config=config, device=DEVICE, args=args)
-                self.model.classifier.load_state_dict(sign_flipping_attack(self.model.classifier.state_dict()))
+                self.model.load_state_dict(sign_flipping_attack(self.model.state_dict()))
             elif args.model == 'regression':
                 train_regression(self.model, self.trainloader, config=config, device=DEVICE, args=args)
                 self.model.load_state_dict(sign_flipping_attack(self.model.state_dict()))
@@ -93,13 +100,13 @@ class FlowerClient(fl.client.NumPyClient):
                 self.model.linear.load_state_dict(additive_noise_attack(self.model.linear.state_dict(), device=DEVICE))
             elif args.model == 'classifier':
                 train_standard_classifier(self.model, self.trainloader, config=config, device=DEVICE, args=args)
-                self.model.classifier.load_state_dict(additive_noise_attack(self.model.classifier.state_dict(), device=DEVICE))
+                self.model.load_state_dict(additive_noise_attack(self.model.state_dict(), device=DEVICE))
             elif args.model == 'regression':
                 train_regression(self.model, self.trainloader, config=config, device=DEVICE, args=args)
                 self.model.load_state_dict(additive_noise_attack(self.model.state_dict(), device=DEVICE))
 
         elif args.attack == "same_value":
-            if args.model == 'cvae' or args.model =='classifier':
+            if args.model == 'cvae':
                 params_dict = zip(self.model.classifier.state_dict().keys(), parameters)
                 state_dict = OrderedDict({k: torch.Tensor(v) for k, v in params_dict})
                 self.model.classifier.load_state_dict(same_value_attack(state_dict))

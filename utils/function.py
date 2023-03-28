@@ -18,17 +18,22 @@ flat_shape = [784]
 cond_shape=10
 
 torch.manual_seed(0)
-# label_flipping_indices = [[7,5], [4,2]]
-label_flipping_indices = [[7,5]]
+label_flipping_indices = [[7,5], [4,2]]
+# label_flipping_indices = [[7,5]]
 
-def train(model, train_dataloader, config, label_flipping=False, device=DEVICE, args=None):
+def train(model, train_dataloader, config, label_flipping=False, train_cvae=True, device=DEVICE, args=None):
     """Train the network on the training set."""
     
     if label_flipping:
         log_label_flipping(label_flipping_indices)
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-    model.train()
+    if train_cvae:
+        optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+        model.train()
+    else:
+        optimizer = torch.optim.Adam(model.classifier.parameters(), lr=1e-3)
+        model.classifier.train()
+
     for epoch in range(config["local_epochs"]):
         train_loss = 0
         classif_accuracy = 0
@@ -39,16 +44,21 @@ def train(model, train_dataloader, config, label_flipping=False, device=DEVICE, 
             if label_flipping:
                 labels = label_flip(labels, label_flipping_indices)
 
-            # 1. Forward pass
-            mu, logvar, recon_batch, c_out = model((images, labels))
-            flat_data = images.view(-1, flat_shape[0]).to(device)                            
-            y_onehot = F.one_hot(labels, cond_shape).to(device)
-            inp = torch.cat((flat_data, y_onehot), 1)
+            if train_cvae:
+                # 1. Forward pass
+                mu, logvar, recon_batch, c_out = model((images, labels))
+                flat_data = images.view(-1, flat_shape[0]).to(device)                            
+                y_onehot = F.one_hot(labels, cond_shape).to(device)
+                inp = torch.cat((flat_data, y_onehot), 1)
 
-            # 2. Calculate loss
-            loss, C_loss, BCE, KLD = loss_fn(recon_batch, flat_data, mu, logvar, c_out, y_onehot)
-            train_loss += loss.item()
-            classif_accuracy += accuracy_fn(labels, torch.argmax(c_out, dim=1))
+                # 2. Calculate loss
+                loss, C_loss, BCE, KLD = loss_fn(recon_batch, inp, mu, logvar, c_out, y_onehot)
+                train_loss += loss.item()
+                classif_accuracy += accuracy_fn(labels, torch.argmax(c_out, dim=1))
+            else:
+                c_out = model(images)                        
+                y_onehot = F.one_hot(labels, cond_shape).to(device)
+
 
             # 3. Zero grad
             optimizer.zero_grad()
@@ -101,8 +111,7 @@ def train_standard_classifier(model, train_dataloader, config, label_flipping=Fa
                 labels = label_flip(labels, label_flipping_indices)
 
             # 1. Forward pass
-            c_out = model((images, labels))
-            flat_data = images.view(-1, flat_shape[0]).to(device)                            
+            c_out = model(images)                        
             y_onehot = F.one_hot(labels, cond_shape).to(device)
 
             # 2. Calculate loss
@@ -277,7 +286,7 @@ def test(model, test_dataloader, device=DEVICE):
             inp = torch.cat((flat_data, y_onehot), 1)
 
             # 2. Loss
-            tot_loss, C_loss, BCE, KLD = loss_fn(recon_batch, flat_data, mu, logvar, c_out, y_onehot)
+            tot_loss, C_loss, BCE, KLD = loss_fn(recon_batch, inp, mu, logvar, c_out, y_onehot)
             test_loss += tot_loss.item()
             c_test_loss += C_loss.item()
             classif_accuracy += accuracy_fn(y, torch.argmax(c_out, dim=1))
@@ -299,7 +308,7 @@ def test_standard_classifier(model, test_dataloader, device=DEVICE):
             X = X.to(device)
             y = y.to(device)
             # 1. Forward pass
-            c_out = model((X, y))
+            c_out = model(X)
 
             flat_data = X.view(-1, flat_shape[0]).to(device)
             y_onehot = F.one_hot(y, cond_shape).to(device)
@@ -423,9 +432,9 @@ def generate_and_save_images(model):
     # Image generation
     model.eval()
     for i in range(2):
-        sample = torch.randn(1, 20).to(DEVICE)
+        sample = torch.randn(64, 20).to(DEVICE)
         c = np.zeros(shape=(sample.shape[0],))
-        label = i+1
+        label = i + 1
         c[:] = label
         c = torch.FloatTensor(c)
         c = c.to(torch.int64)
@@ -434,7 +443,7 @@ def generate_and_save_images(model):
         model.eval()
         with torch.inference_mode():
             sample = model.decoder((sample, c)).to(DEVICE)
-            sample = sample.reshape([1, 1, 28, 28])
+            sample = sample[:, 0:sample.shape[1]-10]
             saving_path = f'{log_img_dir}/round-{config["current_round"]}'
             os.makedirs(saving_path, exist_ok=True)
             save_image(sample, f'{saving_path}/client-{args.num}-label-{label}.png')
