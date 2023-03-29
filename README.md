@@ -1,26 +1,29 @@
+### Note for print statements
+In globals_mod, settings.py file has an option to redirect prints to stdout or file. Please choose as required
+
 ### Detecting malicious updates with GANs in FL scenarios
 
-In this repo, you can find a small FL demo with tensorboard visualization.
+* [FL scenarios](scenarios)
 
-run.sh can be used to launch a standard FL scenario (without malicious updates) with 4 clients for 5 rounds. 
-
-run-malicious.sh can be used to launch a FL scenario with 4 clients including a malicious client for 5 rounds.
-
-* Some images and their labels in the standard (non-malicious) scenario
-![standard_fl](img/standard.png)
-
-* Some images and their labels in the malicious scenario
-![malicious-client](img/malicious.png)
-
-* Launching standard FL scenario
 ```bash
-bash run.sh
+# To run a scenario
+bash scenarios/scenario-id.sh
 ```
+***Detection Strategy vs FedAvg: Additive noise attack (for 2 clients)***
 
-* Launching malicious FL scenario. In this scenario, one client permuted labels of its local images (client number 3).
-```bash
-bash run-malicious.sh
-```
+![additive_noise](img/additive-noise-attack.png)
+
+***Detection Strategy vs FedAvg: Sign flipping attack (for 2 clients)***
+
+![sign_flipping](img/sign-flipping-attack.png)
+
+***Detection Strategy vs FedAvg: Same value attack (for 2 clients)***
+
+![same_value](img/same-value-attack.png)
+
+***Detection Strategy vs FedAvg: Label flipping attack - limited to two labels -> flipping 5 and 8 (for 2 clients)***
+
+![label_flipping](img/label-flipping-attack.png)
 
 * Visualizing training metrics
 ```bash

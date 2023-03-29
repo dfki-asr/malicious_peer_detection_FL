@@ -1,0 +1,24 @@
+dataset: mnist
+strategy: detection_strategy
+attack: label_flipping
+model: cvae
+malicious_index: 50
+
+num_rounds: 50
+min_available_clients: 100
+min_fit_clients: 50
+fraction_fit: 0.5
+server_lr: 1
+server_momentum: 0
+local_epochs: 5
+
+n_client_server_node: 22
+n_client_per_node: 26
+n_part: 100
+alpha: 10
+
+batchsize: 20
+lr: 0.003
+momentum: 0.9
+
+async: 7200

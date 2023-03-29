@@ -13,12 +13,12 @@ def load_data(dataset, batch_size=4):
     if dataset == "cifar10":
         dataset_inst = CIFAR10
         transform = transforms.Compose(
-            [transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
+            [transforms.ToTensor()]
         )
     if dataset == "mnist":
         dataset_inst = MNIST
         transform = transforms.Compose(
-            [transforms.ToTensor(), transforms.Normalize((0.5), (0.5))]
+            [transforms.ToTensor()]
         )
 
     trainset = dataset_inst(
